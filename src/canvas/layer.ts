@@ -6,7 +6,6 @@ import type { HexKey, MapData } from "../types";
 import { MODULE_ID } from "../types";
 import {
   DIFFICULTY_LETTER,
-  TAG_GLYPH,
   borderSegments,
   colorToNumber,
   hexKey,
@@ -18,6 +17,7 @@ import {
 } from "./helpers";
 import { draft } from "./state";
 import { getView, type ViewOptions } from "./view";
+import { DEFAULT_LANDMARK_ICON, DEFAULT_TAG_ICON, glyphOr, landmarkIcon, symbolColor, tagIcon, tagIconOverrides } from "./icons";
 import { terrainFill } from "./terrain";
 
 let container: any = null;
@@ -32,6 +32,22 @@ function center(key: HexKey): { x: number; y: number } {
 
 function vertices(key: HexKey): number[] {
   return canvas.grid.getVertices(parseHexKey(key)).flatMap((p: any) => [p.x, p.y]);
+}
+
+/** A Font Awesome icon as single-colour text (white halo for legibility). Null when the font has no glyph. */
+function icon(name: string, fallback: string, size: number, color: number): any | null {
+  const glyph = glyphOr(name, fallback);
+  if (!glyph) return null;
+  const t = new PIXI.Text(glyph.char, {
+    fontFamily: glyph.fontFamily,
+    fontWeight: glyph.fontWeight,
+    fontSize: size,
+    fill: color,
+    stroke: 0xffffff,
+    strokeThickness: Math.max(2, size / 6),
+  });
+  t.anchor.set(0.5);
+  return t;
 }
 
 function text(str: string, size: number, color = 0x111111): any {
@@ -91,6 +107,7 @@ function drawHexes(root: any, map: MapData, size: number, view: ViewOptions): vo
   root.addChild(fills, outlines, labels);
 
   if (view.borders) drawBorders(outlines, map, size);
+  const overrides = tagIconOverrides();
 
   for (const hex of Object.values(map.hexes)) {
     if (view.terrain) {
@@ -108,10 +125,14 @@ function drawHexes(root: any, map: MapData, size: number, view: ViewOptions): vo
     }
 
     if (view.tags && hex.tags.length) {
-      const glyphs = hex.tags.map((t) => TAG_GLYPH[t] ?? "+").join(" ");
-      const tags = text(glyphs, size / 8, 0x553311);
-      tags.position.set(c.x, c.y - size * 0.12);
-      labels.addChild(tags);
+      const color = colorToNumber(symbolColor(map, hex.key));
+      const step = size / 6;
+      hex.tags.forEach((tag, n) => {
+        const t = icon(tagIcon(tag, overrides), DEFAULT_TAG_ICON, size / 9, color);
+        if (!t) return;
+        t.position.set(c.x + (n - (hex.tags.length - 1) / 2) * step, c.y - size * 0.12);
+        labels.addChild(t);
+      });
     }
   }
 }
@@ -207,10 +228,19 @@ function drawLandmarks(root: any, map: MapData, size: number, view: ViewOptions)
   for (const lm of Object.values(map.landmarks)) {
     const c = center(lm.hex);
     if (view.landmarks) {
-      g.lineStyle(1, 0x000000, 0.9);
-      g.beginFill(lm.knownToParty ? 0xffd700 : 0xb0b0b0, 1);
-      g.drawPolygon(starPoints(c.x, c.y, size / 6, size / 14));
-      g.endFill();
+      // One colour per symbol: the hex's region border colour, else dark brown. Hidden ones (GM only) are faint.
+      const color = colorToNumber(symbolColor(map, lm.hex));
+      const symbol = icon(landmarkIcon(lm), DEFAULT_LANDMARK_ICON, size / 3.2, color);
+      if (symbol) {
+        symbol.alpha = lm.knownToParty ? 1 : 0.5;
+        symbol.position.set(c.x, c.y);
+        root.addChild(symbol);
+      } else {
+        g.lineStyle(1, 0xffffff, 0.9);
+        g.beginFill(color, lm.knownToParty ? 1 : 0.5);
+        g.drawPolygon(starPoints(c.x, c.y, size / 6, size / 14));
+        g.endFill();
+      }
     }
     if (!view.landmarkNames) continue;
     const label = text(lm.name, size / 5, 0x000000);

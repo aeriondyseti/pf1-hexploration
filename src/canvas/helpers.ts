@@ -4,15 +4,6 @@ import { routeLabel } from "../types";
 
 export const DIFFICULTY_LETTER: Record<Difficulty, string> = { easy: "E", standard: "S", hard: "H", brutal: "B" };
 
-export const TAG_GLYPH: Record<string, string> = {
-  difficult: "▲",
-  feature: "◆",
-  "hunting-ground": "✦",
-  resource: "●",
-  secret: "?",
-  standard: "■",
-};
-
 export function hexKey(o: { i: number; j: number }): HexKey {
   return `${o.i},${o.j}`;
 }
@@ -287,7 +278,7 @@ export function hexInfo(
   const label = opts.terrainLabel ?? TERRAIN_LABEL;
   const title = hex ? `${label(hex.terrain)} · ${DIFFICULTY_LABEL[hex.difficulty] ?? hex.difficulty}` : "Uncharted";
   const lines: string[] = [];
-  for (const l of landmarks) lines.push(`★ ${l.name}${opts.gm && !l.knownToParty ? " (hidden)" : ""}`);
+  for (const l of landmarks) lines.push(`Landmark: ${l.name}${opts.gm && !l.knownToParty ? " (hidden)" : ""}`);
   if (opts.caravanHere) lines.push("The caravan is here");
   const region = hex?.region ? map.regions[hex.region] : undefined;
   if (region) {

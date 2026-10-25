@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-25
+
+### Added
+- Landmarks have an optional Font Awesome icon (e.g. `fa-tower-observation`, `fa-water`), with a live preview in the
+  Hex Painter; landmarks without one use `fa-location-dot`.
+- Tag symbols come from one table of Font Awesome icons, which the GM can override per tag (custom tags included)
+  in the Hex Painter's Tags panel.
+
+### Changed
+- Map symbols are Font Awesome glyphs drawn in a single colour: the hex's region border colour, or dark brown outside
+  any region. Hidden landmarks (GM view) are drawn faint. The mini-map uses the same icons and colours.
+- The hover tooltip names landmarks as "Landmark: …" instead of using a star character.
+
 ## [0.1.12] - 2026-10-25
 
 ### Added

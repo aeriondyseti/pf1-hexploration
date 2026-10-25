@@ -76,6 +76,7 @@ export interface Landmark {
   hex: HexKey;
   description: string;
   knownToParty: boolean;
+  icon?: string; // Font Awesome name, e.g. "fa-tower-observation"; default "fa-location-dot"
 }
 
 export type RouteEffect =
