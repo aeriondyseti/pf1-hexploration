@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-25
+
+### Fixed
+- Dragging the Caravan actor onto the scene places its linked token (centred on the hex under the drop) instead of
+  doing nothing; the drop is logged to the console for diagnosis.
+
 ## [0.1.4] - 2026-10-25
 
 ### Added

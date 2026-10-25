@@ -218,23 +218,31 @@ function onPlaceToken(this: any) {
     if (!game.user?.isGM) return;
     const actor = store.getCaravanActor();
     if (!actor) return toast("Set or create a caravan first.", "warn");
-    const scene = canvas?.scene;
-    if (!scene) return toast("View a scene first.", "warn");
-    const existing = scene.tokens?.find((t: any) => t.actorId === actor.id);
-    if (existing) {
-      await canvas.animatePan?.({ x: existing.x, y: existing.y });
-      return toast("The caravan is already on this scene.");
-    }
     const caravan = store.getCaravan();
-    const [i, j] = (caravan.sceneId === scene.id && caravan.position ? caravan.position : "").split(",").map(Number);
-    const center = Number.isFinite(i) && Number.isFinite(j)
-      ? canvas.grid.getCenterPoint({ i, j })
-      : { x: canvas.stage.pivot.x, y: canvas.stage.pivot.y };
-    const size = canvas.grid.size;
-    const token = await actor.getTokenDocument({ ...CARAVAN_TOKEN, x: center.x - size / 2, y: center.y - size / 2 });
-    await scene.createEmbeddedDocuments("Token", [token.toObject()]);
-    toast("Caravan placed on the map.");
+    const [i, j] = (caravan.sceneId === canvas?.scene?.id && caravan.position ? caravan.position : "").split(",").map(Number);
+    const point = Number.isFinite(i) && Number.isFinite(j) ? canvas.grid.getCenterPoint({ i, j }) : null;
+    await placeCaravanToken(actor, point);
   });
+}
+
+/**
+ * GM: create the caravan's linked token on the viewed scene, centred on the hex under `point`
+ * (default: the view centre). Pans to it instead if the caravan is already on the scene.
+ */
+export async function placeCaravanToken(actor: any, point: { x: number; y: number } | null): Promise<void> {
+  const scene = canvas?.scene;
+  if (!scene) return toast("View a scene first.", "warn");
+  const existing = scene.tokens?.find((t: any) => t.actorId === actor.id);
+  if (existing) {
+    await canvas.animatePan?.({ x: existing.x, y: existing.y });
+    return toast("The caravan is already on this scene.");
+  }
+  const at = point ?? { x: canvas.stage.pivot.x, y: canvas.stage.pivot.y };
+  const center = canvas.grid.getCenterPoint(canvas.grid.getOffset(at));
+  const size = canvas.grid.size;
+  const token = await actor.getTokenDocument({ ...CARAVAN_TOKEN, x: center.x - size / 2, y: center.y - size / 2 });
+  await scene.createEmbeddedDocuments("Token", [token.toObject()]);
+  toast("Caravan placed on the map.");
 }
 
 function onCreateCaravan(this: any) {

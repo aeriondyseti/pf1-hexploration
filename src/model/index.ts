@@ -4,8 +4,8 @@
 import { CARAVAN_TOKEN, CARAVAN_TYPE, MODULE_ID } from "../types";
 import { store } from "../store";
 import { hexUi } from "../ui";
-import { dragData, esc, toast } from "../ui/html";
-import { dropActorOnRoster } from "../ui/caravan-app";
+import { attempt, dragData, esc, toast } from "../ui/html";
+import { dropActorOnRoster, placeCaravanToken } from "../ui/caravan-app";
 
 export function registerCaravanType(): void {
   const { TypeDataModel } = foundry.abstract;
@@ -17,6 +17,16 @@ export function registerCaravanType(): void {
     }
   }
   CONFIG.Actor.dataModels[CARAVAN_TYPE] = CaravanModel;
+
+  // Dropping a caravan on the canvas: place its linked token ourselves (hex-centred) instead of Foundry's default.
+  Hooks.on("dropCanvasData", (_canvas: any, data: any) => {
+    if (data?.type !== "Actor" || !data.uuid) return;
+    const actor = fromUuidSync(data.uuid);
+    console.debug(`${MODULE_ID} | drop`, data.uuid, actor?.type, data.x, data.y);
+    if (actor?.type !== CARAVAN_TYPE || !game.user?.isGM) return;
+    void attempt(() => placeCaravanToken(actor, Number.isFinite(data.x) ? { x: data.x, y: data.y } : null));
+    return false;
+  });
 
   // One caravan, one linked token, no resource bars (pf1 token bars expect HP the caravan doesn't have).
   Hooks.on("preCreateActor", (actor: any, data: any) => {
