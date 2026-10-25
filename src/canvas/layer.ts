@@ -7,9 +7,11 @@ import { MODULE_ID } from "../types";
 import {
   DIFFICULTY_LETTER,
   TAG_GLYPH,
+  borderSegments,
   colorToNumber,
-  dashSegments,
+  hexKey,
   parseHexKey,
+  type BorderKind,
   polylineMidpoint,
   starPoints,
 } from "./helpers";
@@ -69,21 +71,22 @@ export function drawLayer(): void {
   if (!canvas.grid.isHexagonal) return;
 
   const map: MapData = gm ? draft.working ?? store.getMap() : store.partyView();
-  const knowledge = gm ? store.getPartyMap().knowledge : {};
   const size = canvas.grid.size;
 
-  drawHexes(root, map, knowledge, gm, size);
+  drawHexes(root, map, size);
   drawRoutes(root, map, size);
   drawLeg(root, map, size);
   if (gm) drawDrafts(root, size);
   drawLandmarks(root, map, size);
 }
 
-function drawHexes(root: any, map: MapData, knowledge: Record<HexKey, string>, gm: boolean, size: number): void {
+function drawHexes(root: any, map: MapData, size: number): void {
   const fills = new PIXI.Graphics();
   const outlines = new PIXI.Graphics();
   const labels = new PIXI.Container();
   root.addChild(fills, outlines, labels);
+
+  drawBorders(outlines, map, size);
 
   for (const hex of Object.values(map.hexes)) {
     const poly = vertices(hex.key);
@@ -91,23 +94,6 @@ function drawHexes(root: any, map: MapData, knowledge: Record<HexKey, string>, g
     fills.drawPolygon(poly);
     fills.endFill();
 
-    const region = hex.region ? map.regions[hex.region] : null;
-    if (region) {
-      outlines.lineStyle(Math.max(2, size / 25), colorToNumber(region.color), 0.9);
-      outlines.drawPolygon(poly);
-    }
-
-    // GM aid: hexes the party has not explored get a dashed dark outline.
-    if (gm && (knowledge[hex.key] ?? "unknown") === "unknown") {
-      outlines.lineStyle(Math.max(1, size / 50), 0x222222, 0.8);
-      const pts = canvas.grid.getVertices(parseHexKey(hex.key));
-      for (let n = 0; n < pts.length; n++) {
-        for (const [x1, y1, x2, y2] of dashSegments(pts[n], pts[(n + 1) % pts.length], size / 10, size / 14)) {
-          outlines.moveTo(x1, y1);
-          outlines.lineTo(x2, y2);
-        }
-      }
-    }
 
     const c = center(hex.key);
     const letter = text(DIFFICULTY_LETTER[hex.difficulty] ?? "?", size / 6, 0x333333);
@@ -120,6 +106,29 @@ function drawHexes(root: any, map: MapData, knowledge: Record<HexKey, string>, g
       tags.position.set(c.x, c.y - size * 0.12);
       labels.addChild(tags);
     }
+  }
+}
+
+const BORDER_WIDTH: Record<BorderKind, (size: number) => number> = {
+  base: (size) => Math.max(1, size / 50),
+  region: (size) => Math.max(2, size / 25),
+  double: (size) => Math.max(2, size / 32),
+};
+
+function drawBorders(g: any, map: MapData, size: number): void {
+  const segments = borderSegments(
+    map,
+    {
+      verticesOf: (key) => canvas.grid.getVertices(parseHexKey(key)),
+      centerOf: center,
+      neighbourAt: (p) => hexKey(canvas.grid.getOffset(p)),
+    },
+    BORDER_WIDTH.double(size) * 0.75,
+  );
+  for (const s of segments) {
+    g.lineStyle(BORDER_WIDTH[s.kind](size), colorToNumber(s.color), s.kind === "base" ? 0.8 : 0.95);
+    g.moveTo(s.x1, s.y1);
+    g.lineTo(s.x2, s.y2);
   }
 }
 

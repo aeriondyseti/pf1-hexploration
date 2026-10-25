@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   applyBrush,
   colorToNumber,
-  dashSegments,
   extendPath,
   formatDcMods,
   parseDcMods,
@@ -95,11 +94,8 @@ describe("drawing geometry", () => {
     expect(polylineMidpoint([{ x: 3, y: 4 }])).toEqual({ x: 3, y: 4 });
   });
 
-  it("makes stars and dashes", () => {
+  it("makes stars", () => {
     expect(starPoints(0, 0, 10, 4)).toHaveLength(20);
-    const dashes = dashSegments({ x: 0, y: 0 }, { x: 10, y: 0 }, 3, 2);
-    expect(dashes[0]).toEqual([0, 0, 3, 0]);
-    expect(dashes.at(-1)![2]).toBeLessThanOrEqual(10);
   });
 
   it("has a palette with a fallback fill", () => {

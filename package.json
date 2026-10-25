@@ -1,6 +1,6 @@
 {
   "name": "pf1-hexploration",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "description": "Foundry VTT v13 module for Pathfinder 1e: caravan-role hexploration.",

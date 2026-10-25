@@ -13,8 +13,7 @@ import {
   parseEffects,
   parseHexKey,
   parsePrompts,
-  type BrushOp,
-} from "./helpers";
+  type BrushOp, DEFAULT_BASE_COLOR } from "./helpers";
 import { drawLayer } from "./layer";
 import { draft, notify } from "./state";
 import { TERRAINS, TERRAIN_KEYS } from "./terrain";
@@ -424,7 +423,11 @@ function renderPainter(): string {
     (t) => `<button type="button" class="${t.id === tool ? "active" : ""}" data-action="tool" data-tool="${t.id}" title="${t.label}">
       <i class="fa-solid ${t.icon}"></i> ${t.label}</button>`,
   ).join("");
-  return `<div class="pf1hex-tools">${tools}</div><div class="pf1hex-panel">${toolPanel(map)}</div>${listsHtml(map)}`;
+  const baseColor = map.baseColor || DEFAULT_BASE_COLOR;
+  const mapRow = `<div class="pf1hex-row" title="Border colour for hexes that are not in a region">
+    <label>Map border <input type="color" name="mapColor" value="${baseColor}"></label>
+    <button type="button" data-action="saveMapColor">Set</button></div>`;
+  return `${mapRow}<div class="pf1hex-tools">${tools}</div><div class="pf1hex-panel">${toolPanel(map)}</div>${listsHtml(map)}`;
 }
 
 // ---------- actions (called with this = app) ----------
@@ -468,6 +471,12 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
       });
     }),
   saveRegion: () => guarded(saveRegion),
+  saveMapColor: () =>
+    guarded(async () => {
+      const map = cloneMap();
+      map.baseColor = str("mapColor") || DEFAULT_BASE_COLOR;
+      await store.setMap(map);
+    }),
   deleteRegion: (_e, t) => guarded(() => deleteRegion(id(t))),
   saveLandmark: () => guarded(saveLandmark),
   editLandmark: (_e, t) =>

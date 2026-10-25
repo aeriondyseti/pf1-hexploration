@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-25
+
+### Changed
+- Hex borders are drawn edge by edge: hexes outside any region use the map's border colour (grey by default, set
+  in the Hex Painter), a region's colour wins on every side of its hexes, and where two regions meet each draws its
+  colour just inside the shared edge as a double line.
+
+### Removed
+- The GM's dashed outline on hexes the party has not explored (the hover tooltip shows what the party knows).
+
 ## [0.1.7] - 2026-10-25
 
 ### Added

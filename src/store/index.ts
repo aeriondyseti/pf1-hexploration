@@ -176,6 +176,7 @@ export const store = {
     const map = store.getMap(sceneId);
     const { knowledge } = store.getPartyMap(sceneId);
     const view = emptyMap();
+    if (map.baseColor) view.baseColor = map.baseColor;
 
     for (const [key, state] of Object.entries(knowledge)) {
       const hex = map.hexes[key];

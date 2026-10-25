@@ -90,6 +90,8 @@ export interface Route {
 
 /** GM truth for one scene: everything the map contains. */
 export interface MapData {
+  /** Border colour for hexes outside any region (default grey). */
+  baseColor?: string;
   hexes: Record<HexKey, HexRecord>;
   regions: Record<string, Region>;
   landmarks: Record<string, Landmark>;

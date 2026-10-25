@@ -186,20 +186,6 @@ export function polylineMidpoint(points: Pt[]): Pt {
   return points[points.length - 1];
 }
 
-/** Dash segments [x1, y1, x2, y2] along a line (PIXI v7 has no native dashed stroke). */
-export function dashSegments(a: Pt, b: Pt, dash: number, gap: number): [number, number, number, number][] {
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  if (!len) return [];
-  const ux = (b.x - a.x) / len;
-  const uy = (b.y - a.y) / len;
-  const out: [number, number, number, number][] = [];
-  for (let s = 0; s < len; s += dash + gap) {
-    const e = Math.min(len, s + dash);
-    out.push([a.x + ux * s, a.y + uy * s, a.x + ux * e, a.y + uy * e]);
-  }
-  return out;
-}
-
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -252,4 +238,72 @@ export function hexInfo(
   for (const r of routes) lines.push(`Route: ${r.name} (${r.days} d, ${DIFFICULTY_LABEL[r.difficulty] ?? r.difficulty})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
   if (opts.gm) lines.push(`Party knows: ${opts.knowledge ?? "unknown"}`);
   return { title, lines };
+}
+
+/** Default border colour for hexes outside any region (a map can override it with `baseColor`). */
+export const DEFAULT_BASE_COLOR = "#888888";
+
+export type BorderKind = "base" | "region" | "double";
+
+export interface BorderSegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+  kind: BorderKind;
+}
+
+/**
+ * Hex borders drawn edge by edge (no polygon outlines, so neighbours never overdraw each other):
+ * - an edge between two hexes of the same region (or two region-less hexes) is drawn once, in that colour;
+ * - a region hex's colour wins over a region-less neighbour (or the map edge);
+ * - an edge between two different regions is drawn twice, each region's colour inset into its own hex (a
+ *   double line). `inset` is in pixels.
+ * `verticesOf` gives a hex's corner points in order; `neighbourAt` maps a point to the hex key under it.
+ */
+export function borderSegments(
+  map: MapData,
+  geometry: { verticesOf: (key: HexKey) => Pt[]; centerOf: (key: HexKey) => Pt; neighbourAt: (p: Pt) => HexKey },
+  inset: number,
+): BorderSegment[] {
+  const base = map.baseColor || DEFAULT_BASE_COLOR;
+  const regionOf = (key: HexKey) => {
+    const id = map.hexes[key]?.region;
+    return id && map.regions[id] ? id : null;
+  };
+  const out: BorderSegment[] = [];
+  for (const key of Object.keys(map.hexes)) {
+    const v = geometry.verticesOf(key);
+    const c = geometry.centerOf(key);
+    const mine = regionOf(key);
+    for (let k = 0; k < v.length; k++) {
+      const a = v[k];
+      const b = v[(k + 1) % v.length];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const across = geometry.neighbourAt({ x: mid.x + (mid.x - c.x) * 0.3, y: mid.y + (mid.y - c.y) * 0.3 });
+      const exists = across !== key && !!map.hexes[across];
+      const theirs = exists ? regionOf(across) : null;
+      const once = !exists || key < across; // shared edges between like hexes are drawn by one side only
+
+      if (mine && theirs && mine !== theirs) {
+        const p = toward(a, c, inset);
+        const q = toward(b, c, inset);
+        out.push({ x1: p.x, y1: p.y, x2: q.x, y2: q.y, color: map.regions[mine].color, kind: "double" });
+      } else if (mine) {
+        if (theirs === mine && !once) continue;
+        out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: map.regions[mine].color, kind: "region" });
+      } else if (!theirs && once) {
+        out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: base, kind: "base" });
+      }
+    }
+  }
+  return out;
+}
+
+function toward(p: Pt, c: Pt, d: number): Pt {
+  const dx = c.x - p.x;
+  const dy = c.y - p.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: p.x + (dx / len) * d, y: p.y + (dy / len) * d };
 }
