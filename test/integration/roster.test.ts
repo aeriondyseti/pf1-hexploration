@@ -29,6 +29,21 @@ describe("addToRoster", () => {
     expect(store.getCaravanActor()?.uuid).toBe(caravan.uuid);
   });
 
+  it("keeps the window's unsaved row edits when a member is added", async () => {
+    const pc = world.createActor({ name: "Sabrina", type: "character" });
+    await addToRoster(pc);
+    expect(store.getCaravan().roster[0].npc).toBe(true); // no player owns the fake PC
+
+    const shown = store.getCaravan().roster.map((m) => ({ ...m, npc: false })); // GM un-ticked NPC, not yet saved
+    await addToRoster(world.createActor({ name: "Seba", type: "npc" }), true, shown);
+
+    const roster = store.getCaravan().roster;
+    expect(roster.map((m) => [m.name, m.npc])).toEqual([
+      ["Sabrina", false],
+      ["Seba", true],
+    ]);
+  });
+
   it("does nothing on a player client", async () => {
     const pc = world.createActor({ name: "Sabrina", type: "character" });
     useClient(world, world.player);

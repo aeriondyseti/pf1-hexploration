@@ -4,6 +4,14 @@
 export const MODULE_ID = "pf1-hexploration";
 /** The Caravan actor subtype (DESIGN §4.6). */
 export const CARAVAN_TYPE = `${MODULE_ID}.caravan`;
+/** Prototype-token settings for a caravan (also applied by the Caravan window's "Place on map"). */
+export const CARAVAN_TOKEN = {
+  actorLink: true,
+  bar1: { attribute: null },
+  bar2: { attribute: null },
+  displayBars: 0, // CONST.TOKEN_DISPLAY_MODES.NONE
+  displayName: 30, // CONST.TOKEN_DISPLAY_MODES.HOVER
+};
 
 /** Foundry v13 offset coordinates of a hex, as `${i},${j}` (i = row, j = column). */
 export type HexKey = string;

@@ -1,11 +1,11 @@
 // The Caravan actor subtype (`pf1-hexploration.caravan`, DESIGN §4.6). pf1's actor proxy falls back to
 // ActorBasePF for types it does not map, so the subtype runs on pf1's base actor class. Caravan state stays in
 // JSON flags (src/store); the system model only carries notes. Call registerCaravanType() in init.
-import { CARAVAN_TYPE, MODULE_ID } from "../types";
+import { CARAVAN_TOKEN, CARAVAN_TYPE, MODULE_ID } from "../types";
 import { store } from "../store";
 import { hexUi } from "../ui";
-import { dragData, esc, toast } from "../ui/html";
-import { dropActorOnRoster } from "../ui/caravan-app";
+import { attempt, dragData, esc, toast } from "../ui/html";
+import { dropActorOnRoster, placeCaravanToken } from "../ui/caravan-app";
 
 export function registerCaravanType(): void {
   const { TypeDataModel } = foundry.abstract;
@@ -17,6 +17,22 @@ export function registerCaravanType(): void {
     }
   }
   CONFIG.Actor.dataModels[CARAVAN_TYPE] = CaravanModel;
+
+  // Dropping a caravan on the canvas: place its linked token ourselves (hex-centred) instead of Foundry's default.
+  Hooks.on("dropCanvasData", (_canvas: any, data: any) => {
+    if (data?.type !== "Actor" || !data.uuid) return;
+    const actor = fromUuidSync(data.uuid);
+    console.debug(`${MODULE_ID} | drop`, data.uuid, actor?.type, data.x, data.y);
+    if (actor?.type !== CARAVAN_TYPE || !game.user?.isGM) return;
+    void attempt(() => placeCaravanToken(actor, Number.isFinite(data.x) ? { x: data.x, y: data.y } : null));
+    return false;
+  });
+
+  // One caravan, one linked token, no resource bars (pf1 token bars expect HP the caravan doesn't have).
+  Hooks.on("preCreateActor", (actor: any, data: any) => {
+    if (data?.type !== CARAVAN_TYPE) return;
+    actor.updateSource({ prototypeToken: { ...CARAVAN_TOKEN, ...(data.prototypeToken ?? {}) } });
+  });
 
   const sheets = foundry.applications?.apps?.DocumentSheetConfig ?? (globalThis as any).DocumentSheetConfig;
   sheets.registerSheet(Actor, MODULE_ID, caravanSheetClass(), { types: [CARAVAN_TYPE], makeDefault: true, label: "Caravan" });
