@@ -31,12 +31,32 @@ export type Track = SupplyTrack | "wagon";
 /** Built-in Ultimate Campaign terrain elements (DESIGN §4.2). Custom tags are any other string. */
 export const UC_TAGS = ["difficult", "feature", "hunting-ground", "resource", "secret", "standard"] as const;
 
+/** Values stamped onto a hex when it is created: by a region (Region.defaults) or by the map for region-less hexes. */
+export interface HexDefaults {
+  terrain: string;
+  difficulty: Difficulty;
+  tags: string[];
+  encounterMod: number;
+}
+
+/** Travel rules for hexes outside any region: the same rules a Region carries. */
+export interface MapRules {
+  dcMods: Record<string, number>;
+  encounterTable: string | null;
+  waterMultiplier: number;
+  stormThreshold: number | null;
+}
+
+/** Synthetic region id the engine uses for hexes outside any region (built from MapData.rules). */
+export const MAP_REGION_ID = "__map__";
+
 export interface HexRecord {
   key: HexKey;
   terrain: string; // free label, e.g. "desert", "dunes", "salt flat"
   difficulty: Difficulty;
   region: string | null; // Region.id
   tags: string[]; // UC_TAGS and custom tags
+  encounterMod?: number; // added to this hex's daily encounter roll (default 0)
 }
 
 export interface Region {
@@ -47,6 +67,7 @@ export interface Region {
   dcMods: Record<string, number>; // roleId -> DC modifier; key "*" applies to every role
   waterMultiplier: number; // 1 normally; heat bands later
   stormThreshold: number | null; // encounter total at/above which the GM is told the storm reaches for them
+  defaults?: HexDefaults; // stamped onto hexes painted into this region
 }
 
 export interface Landmark {
@@ -88,8 +109,19 @@ export interface Route {
   knownToParty: boolean;
 }
 
+/** A route's display label: its name, or a short description when it has none ("3-day easy route"). */
+export function routeLabel(route: Pick<Route, "name" | "days" | "difficulty">): string {
+  return route.name?.trim() || `${route.days}-day ${route.difficulty} route`;
+}
+
 /** GM truth for one scene: everything the map contains. */
 export interface MapData {
+  /** Border colour for hexes outside any region (default grey). */
+  baseColor?: string;
+  /** Stamped onto new hexes outside any region. */
+  defaults?: HexDefaults;
+  /** Travel rules for hexes outside any region. */
+  rules?: MapRules;
   hexes: Record<HexKey, HexRecord>;
   regions: Record<string, Region>;
   landmarks: Record<string, Landmark>;

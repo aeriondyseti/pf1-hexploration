@@ -3,6 +3,7 @@ import type { EngineApi, ResolveLegInput, Roller } from "../contracts";
 import {
   DIFFICULTIES,
   ENCOUNTER_BONUS,
+  MAP_REGION_ID,
   WAGON_DRAIN,
   type Assignment,
   type CaravanSettings,
@@ -220,6 +221,7 @@ function resolveLeg(input: ResolveLegInput): LegOutcome {
 
     let encounterBonus = plan.routeId ? plan.encounterBonus : ENCOUNTER_BONUS[difficulty];
     if (rec?.tags.includes("hunting-ground")) encounterBonus += 2;
+    encounterBonus += rec?.encounterMod ?? 0;
 
     days.push({
       day: d,
@@ -260,6 +262,30 @@ function resolveLeg(input: ResolveLegInput): LegOutcome {
   };
 }
 
+/** The map as the rules see it (DESIGN §4.2): hexes outside any region join a synthetic region built from map.rules. */
+function effectiveMap(map: MapData): MapData {
+  const rules = map.rules;
+  const outside: Region = {
+    id: MAP_REGION_ID,
+    name: "Outside any region",
+    color: map.baseColor ?? "#888888",
+    encounterTable: rules?.encounterTable ?? null,
+    dcMods: { ...(rules?.dcMods ?? {}) },
+    waterMultiplier: rules?.waterMultiplier ?? 1,
+    stormThreshold: rules?.stormThreshold ?? null,
+  };
+  const hexes: Record<HexKey, HexRecord> = {};
+  for (const [key, hex] of Object.entries(map.hexes)) {
+    hexes[key] = hex.region ? hex : { ...hex, region: MAP_REGION_ID };
+  }
+  return { ...map, hexes, regions: { ...map.regions, [MAP_REGION_ID]: outside } };
+}
+
+/** The region whose rules apply to a hex: its own, else the map's (MAP_REGION_ID). */
+function regionOfHex(map: MapData, key: HexKey): string {
+  return map.hexes[key]?.region || MAP_REGION_ID;
+}
+
 function planFromRoute(map: MapData, routeId: string): LegPlan {
   const route = map.routes[routeId];
   if (!route) throw new Error(`Unknown route: ${routeId}`);
@@ -273,13 +299,13 @@ function planFromRoute(map: MapData, routeId: string): LegPlan {
     encounterBonus: route.encounterBonus,
     effects: [...route.effects],
     prompts: [...route.prompts],
-    regionId: (last ? map.hexes[last]?.region : null) ?? null,
+    regionId: regionOfHex(map, last ?? route.from),
   };
 }
 
 function planFromPath(map: MapData, from: HexKey, path: HexKey[]): LegPlan {
   let difficulty: Difficulty = "standard";
-  let regionId: string | null = null;
+  let regionId: string | null = path.length ? null : regionOfHex(map, from);
   let rank = -1;
   for (const key of path) {
     const rec = map.hexes[key];
@@ -287,7 +313,7 @@ function planFromPath(map: MapData, from: HexKey, path: HexKey[]): LegPlan {
     if (DIFFICULTIES.indexOf(d) > rank) {
       rank = DIFFICULTIES.indexOf(d);
       difficulty = d;
-      regionId = rec?.region ?? null;
+      regionId = regionOfHex(map, key);
     }
   }
   return {
@@ -350,6 +376,7 @@ export const engine = {
   rolesHeldBy,
   doublingPenalty,
   resolveLeg,
+  effectiveMap,
   planFromRoute,
   planFromPath,
   encounterTotal,

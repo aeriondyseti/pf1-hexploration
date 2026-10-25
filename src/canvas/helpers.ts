@@ -1,5 +1,6 @@
 // Pure helpers for the canvas layer and painter (no Foundry globals; unit-tested).
-import type { Difficulty, GmPrompt, HexKey, HexRecord, KnowledgeState, MapData, RouteEffect } from "../types";
+import type { Difficulty, GmPrompt, HexDefaults, HexKey, HexRecord, KnowledgeState, MapData, RouteEffect } from "../types";
+import { routeLabel } from "../types";
 
 export const DIFFICULTY_LETTER: Record<Difficulty, string> = { easy: "E", standard: "S", hard: "H", brutal: "B" };
 
@@ -22,29 +23,53 @@ export function parseHexKey(key: HexKey): { i: number; j: number } {
 }
 
 export type BrushOp =
-  | { kind: "terrain"; terrain: string; difficulty: Difficulty }
+  | { kind: "terrain"; terrain: string; difficulty: Difficulty; encounterMod?: number | null } // null/absent: keep
   | { kind: "region"; regionId: string | null }
   | { kind: "tag"; tag: string; add: boolean }
   | { kind: "erase" };
 
-/** Apply a brush to hexes, returning a new map. Region/tag brushes create a hex from `fallback` if none exists. */
-export function applyBrush(
-  map: MapData,
-  keys: HexKey[],
-  op: BrushOp,
-  fallback: { terrain: string; difficulty: Difficulty },
-): MapData {
+/** Where a new hex's starting values come from: a fixed fallback, or a lookup by the region it is created in. */
+export type HexDefaultsSource =
+  | { terrain: string; difficulty: Difficulty; tags?: string[]; encounterMod?: number }
+  | ((regionId: string | null) => HexDefaults);
+
+/**
+ * The defaults stamped onto a hex created in `regionId` (DESIGN §4.2): the region's own defaults, else the map's
+ * defaults for region-less hexes, else `fallback` (the painter's current terrain brush).
+ */
+export function hexDefaultsFor(map: MapData, regionId: string | null, fallback: HexDefaults): HexDefaults {
+  const region = regionId ? map.regions[regionId] : undefined;
+  const d = region?.defaults ?? map.defaults ?? fallback;
+  return { terrain: d.terrain, difficulty: d.difficulty, tags: [...(d.tags ?? [])], encounterMod: d.encounterMod ?? 0 };
+}
+
+/**
+ * Apply a brush to hexes, returning a new map. A brush that lands on an empty hex creates it, stamped with the
+ * defaults of the region it is created in (region brush) or the map's (other brushes). Existing hexes keep their
+ * values except what the brush sets.
+ */
+export function applyBrush(map: MapData, keys: HexKey[], op: BrushOp, defaults: HexDefaultsSource): MapData {
+  const lookup = (regionId: string | null): HexDefaults =>
+    typeof defaults === "function"
+      ? defaults(regionId)
+      : { terrain: defaults.terrain, difficulty: defaults.difficulty, tags: [...(defaults.tags ?? [])], encounterMod: defaults.encounterMod ?? 0 };
   const hexes = { ...map.hexes };
   for (const key of keys) {
     if (op.kind === "erase") {
       delete hexes[key];
       continue;
     }
-    const prev: HexRecord = hexes[key] ?? { key, ...fallback, region: null, tags: [] };
+    let prev = hexes[key];
+    if (!prev) {
+      const regionId = op.kind === "region" ? op.regionId : null;
+      const d = lookup(regionId);
+      prev = { key, terrain: d.terrain, difficulty: d.difficulty, region: null, tags: d.tags, ...(d.encounterMod ? { encounterMod: d.encounterMod } : {}) };
+    }
     const next: HexRecord = { ...prev, tags: [...prev.tags] };
     if (op.kind === "terrain") {
       next.terrain = op.terrain;
       next.difficulty = op.difficulty;
+      if (op.encounterMod !== undefined && op.encounterMod !== null) next.encounterMod = op.encounterMod;
     } else if (op.kind === "region") {
       next.region = op.regionId;
     } else if (op.add) {
@@ -55,6 +80,20 @@ export function applyBrush(
     hexes[key] = next;
   }
   return { ...map, hexes };
+}
+
+/** Re-stamp every hex outside any region with the map's defaults (terrain, difficulty, tags, encounter mod). */
+export function restampUnregioned(map: MapData): { map: MapData; count: number } {
+  if (!map.defaults) return { map, count: 0 };
+  const d = map.defaults;
+  const hexes = { ...map.hexes };
+  let count = 0;
+  for (const [key, hex] of Object.entries(map.hexes)) {
+    if (hex.region && map.regions[hex.region]) continue;
+    hexes[key] = { ...hex, terrain: d.terrain, difficulty: d.difficulty, tags: [...d.tags], encounterMod: d.encounterMod };
+    count++;
+  }
+  return { map: { ...map, hexes }, count };
 }
 
 /**
@@ -186,20 +225,6 @@ export function polylineMidpoint(points: Pt[]): Pt {
   return points[points.length - 1];
 }
 
-/** Dash segments [x1, y1, x2, y2] along a line (PIXI v7 has no native dashed stroke). */
-export function dashSegments(a: Pt, b: Pt, dash: number, gap: number): [number, number, number, number][] {
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  if (!len) return [];
-  const ux = (b.x - a.x) / len;
-  const uy = (b.y - a.y) / len;
-  const out: [number, number, number, number][] = [];
-  for (let s = 0; s < len; s += dash + gap) {
-    const e = Math.min(len, s + dash);
-    out.push([a.x + ux * s, a.y + uy * s, a.x + ux * e, a.y + uy * e]);
-  }
-  return out;
-}
-
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -207,4 +232,118 @@ export function escapeHtml(value: unknown): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+export interface HexInfo {
+  title: string; // e.g. "Dunes · Hard"
+  lines: string[]; // plain text; the tooltip escapes it
+}
+
+const TERRAIN_LABEL = (terrain: string) => terrain.charAt(0).toUpperCase() + terrain.slice(1);
+const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: "Easy", standard: "Standard", hard: "Hard", brutal: "Brutal" };
+
+/**
+ * What the hover tooltip shows for one hex. `map` must already be the viewer's map: the full map for the GM,
+ * `store.partyView()` for players (invariant 1). `gm` adds GM-only detail (party knowledge, region tuning).
+ * Returns null when there is nothing to show (no record and no landmark/route/caravan on the hex).
+ */
+export function hexInfo(
+  map: MapData,
+  key: HexKey,
+  opts: { gm: boolean; knowledge?: KnowledgeState; caravanHere?: boolean; terrainLabel?: (t: string) => string },
+): HexInfo | null {
+  const hex = map.hexes[key];
+  const landmarks = Object.values(map.landmarks).filter((l) => l.hex === key);
+  const routes = Object.values(map.routes).filter((r) => r.from === key || r.hexes.includes(key));
+  if (!hex && !landmarks.length && !routes.length && !opts.caravanHere) return null;
+
+  const label = opts.terrainLabel ?? TERRAIN_LABEL;
+  const title = hex ? `${label(hex.terrain)} · ${DIFFICULTY_LABEL[hex.difficulty] ?? hex.difficulty}` : "Uncharted";
+  const lines: string[] = [];
+  for (const l of landmarks) lines.push(`★ ${l.name}${opts.gm && !l.knownToParty ? " (hidden)" : ""}`);
+  if (opts.caravanHere) lines.push("The caravan is here");
+  const region = hex?.region ? map.regions[hex.region] : undefined;
+  if (region) {
+    let text = `Region: ${region.name}`;
+    if (opts.gm) {
+      const mods = Object.entries(region.dcMods ?? {}).map(([k, v]) => `${k === "*" ? "all" : k} ${v >= 0 ? "+" : ""}${v}`);
+      if (mods.length) text += ` (DC ${mods.join(", ")})`;
+      if (region.waterMultiplier && region.waterMultiplier !== 1) text += ` · water ×${region.waterMultiplier}`;
+      text += region.encounterTable ? " · encounter table set" : " · no encounter table";
+    }
+    lines.push(text);
+  }
+  if (hex?.tags.length) lines.push(`Tags: ${hex.tags.join(", ")}`);
+  if (hex?.encounterMod) lines.push(`Encounter ${hex.encounterMod > 0 ? "+" : ""}${hex.encounterMod}`);
+  for (const r of routes) lines.push(`Route: ${routeLabel(r)} (${r.days} d, ${DIFFICULTY_LABEL[r.difficulty] ?? r.difficulty})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
+  if (opts.gm) lines.push(`Party knows: ${opts.knowledge ?? "unknown"}`);
+  return { title, lines };
+}
+
+/** Default border colour for hexes outside any region (a map can override it with `baseColor`). */
+export const DEFAULT_BASE_COLOR = "#888888";
+
+export type BorderKind = "base" | "region" | "double";
+
+export interface BorderSegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+  kind: BorderKind;
+}
+
+/**
+ * Hex borders drawn edge by edge (no polygon outlines, so neighbours never overdraw each other):
+ * - an edge between two hexes of the same region (or two region-less hexes) is drawn once, in that colour;
+ * - a region hex's colour wins over a region-less neighbour (or the map edge);
+ * - an edge between two different regions is drawn twice, each region's colour inset into its own hex (a
+ *   double line). `inset` is in pixels.
+ * `verticesOf` gives a hex's corner points in order; `neighbourAt` maps a point to the hex key under it.
+ */
+export function borderSegments(
+  map: MapData,
+  geometry: { verticesOf: (key: HexKey) => Pt[]; centerOf: (key: HexKey) => Pt; neighbourAt: (p: Pt) => HexKey },
+  inset: number,
+): BorderSegment[] {
+  const base = map.baseColor || DEFAULT_BASE_COLOR;
+  const regionOf = (key: HexKey) => {
+    const id = map.hexes[key]?.region;
+    return id && map.regions[id] ? id : null;
+  };
+  const out: BorderSegment[] = [];
+  for (const key of Object.keys(map.hexes)) {
+    const v = geometry.verticesOf(key);
+    const c = geometry.centerOf(key);
+    const mine = regionOf(key);
+    for (let k = 0; k < v.length; k++) {
+      const a = v[k];
+      const b = v[(k + 1) % v.length];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const across = geometry.neighbourAt({ x: mid.x + (mid.x - c.x) * 0.3, y: mid.y + (mid.y - c.y) * 0.3 });
+      const exists = across !== key && !!map.hexes[across];
+      const theirs = exists ? regionOf(across) : null;
+      const once = !exists || key < across; // shared edges between like hexes are drawn by one side only
+
+      if (mine && theirs && mine !== theirs) {
+        const p = toward(a, c, inset);
+        const q = toward(b, c, inset);
+        out.push({ x1: p.x, y1: p.y, x2: q.x, y2: q.y, color: map.regions[mine].color, kind: "double" });
+      } else if (mine) {
+        if (theirs === mine && !once) continue;
+        out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: map.regions[mine].color, kind: "region" });
+      } else if (!theirs && once) {
+        out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: base, kind: "base" });
+      }
+    }
+  }
+  return out;
+}
+
+function toward(p: Pt, c: Pt, d: number): Pt {
+  const dx = c.x - p.x;
+  const dy = c.y - p.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: p.x + (dx / len) * d, y: p.y + (dy / len) * d };
 }

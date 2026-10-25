@@ -14,6 +14,7 @@ import type {
   RosterMember,
   SupplyTrack,
 } from "../types";
+import { routeLabel } from "../types";
 import { authority } from "../authority";
 import { engine, legRoleDc } from "../engine";
 import { ledger } from "../ledger";
@@ -231,7 +232,7 @@ async function forcedMarch(day: DayPlan, leg: LegState, roster: RosterMember[], 
 
 async function encounter(caravan: CaravanState, day: DayPlan, surprised: boolean): Promise<void> {
   const { d20, total } = engine.encounterTotal(foundryRoller, caravan.journeyDay + 1, day.encounterBonus);
-  const region = day.regionId ? store.getMap(caravan.sceneId ?? undefined).regions[day.regionId] : undefined;
+  const region = day.regionId ? engine.effectiveMap(store.getMap(caravan.sceneId ?? undefined)).regions[day.regionId] : undefined;
   let resultText = "";
   if (region?.encounterTable) {
     try {
@@ -505,7 +506,7 @@ export const travel = {
 
       // Party view only: never name or describe a route the party doesn't know (invariant 1).
       const route = plan.routeId ? store.partyView(after.sceneId ?? undefined).routes[plan.routeId] : undefined;
-      const title = route ? escapeHtml(route.name) : "an off-route path";
+      const title = route ? escapeHtml(routeLabel(route)) : "an off-route path";
       const bargain = route?.bargain ? `<p><em>${escapeHtml(route.bargain)}</em></p>` : "";
       await postPublic(
         `<h3>The caravan musters</h3><p>Next leg: <strong>${title}</strong> (${plan.path.length} hexes, ${plan.difficulty}).</p>` +
@@ -529,7 +530,7 @@ export const travel = {
       const before = store.getCaravan();
       const leg = before.leg;
       if (!leg || leg.status !== "muster") return warn("No leg is mustering.");
-      const map = store.getMap(before.sceneId ?? undefined);
+      const map = engine.effectiveMap(store.getMap(before.sceneId ?? undefined));
       const roles = store.getRoles();
       const roster = before.roster;
       const plan = clone(leg.plan);

@@ -5,6 +5,43 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-25
+
+### Added
+- Regions can carry defaults for new hexes (terrain, difficulty, tags, encounter mod), stamped onto any hex painted
+  into the region; the GM can still repaint or retag it afterwards (ADR-0006).
+- Each map has defaults for new hexes outside any region and its own travel rules for them: DC modifiers, encounter
+  table, water multiplier and storm threshold. "Re-stamp region-less hexes" resets every hex outside a region to
+  the map defaults on request.
+- A per-hex encounter mod, set with the terrain brush and shown in the hover tooltip.
+
+### Changed
+- Route names are optional; an unnamed route draws no label on the map and is listed as e.g. "3-day easy route".
+- Hidden routes are drawn faint on the GM's map (players never see them).
+
+## [0.1.8] - 2026-10-25
+
+### Changed
+- Hex borders are drawn edge by edge: hexes outside any region use the map's border colour (grey by default, set
+  in the Hex Painter), a region's colour wins on every side of its hexes, and where two regions meet each draws its
+  colour just inside the shared edge as a double line.
+
+### Removed
+- The GM's dashed outline on hexes the party has not explored (the hover tooltip shows what the party knows).
+
+## [0.1.7] - 2026-10-25
+
+### Added
+- Hovering over a hex on a hex scene shows a small panel with its terrain and difficulty, region, tags, landmarks,
+  routes and whether the caravan is there. GMs also see region tuning and what the party knows; players see only
+  what the party knows. Per-user setting: Hex tooltips (on by default).
+
+## [0.1.6] - 2026-10-25
+
+### Changed
+- On scenes without a hexagonal grid (battlemaps, backgrounds) the Hex Painter, Caravan Travel and Caravan buttons
+  are hidden from the token controls, and the "this scene needs a hexagonal grid" notice no longer appears.
+
 ## [0.1.5] - 2026-10-25
 
 ### Fixed

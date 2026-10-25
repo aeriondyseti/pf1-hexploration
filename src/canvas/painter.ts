@@ -1,10 +1,12 @@
 // GM map painter: an ApplicationV2 window plus canvas pointer handling for its tools.
 // Brush strokes are previewed on a working copy and written once on pointerup (one store write per stroke).
 import { store } from "../store";
-import type { Difficulty, HexKey, KnowledgeState, Landmark, MapData, Region, Route } from "../types";
-import { DIFFICULTIES, ENCOUNTER_BONUS, MODULE_ID, UC_TAGS } from "../types";
+import type { Difficulty, HexDefaults, HexKey, KnowledgeState, Landmark, MapData, MapRules, Region, Route } from "../types";
+import { DIFFICULTIES, ENCOUNTER_BONUS, MODULE_ID, UC_TAGS, routeLabel } from "../types";
 import {
   applyBrush,
+  hexDefaultsFor,
+  restampUnregioned,
   escapeHtml,
   extendPath,
   formatDcMods,
@@ -13,8 +15,7 @@ import {
   parseEffects,
   parseHexKey,
   parsePrompts,
-  type BrushOp,
-} from "./helpers";
+  type BrushOp, DEFAULT_BASE_COLOR } from "./helpers";
 import { drawLayer } from "./layer";
 import { draft, notify } from "./state";
 import { TERRAINS, TERRAIN_KEYS } from "./terrain";
@@ -73,7 +74,12 @@ function adjacent(a: HexKey, b: HexKey): boolean {
 function brushOp(tool: Tool, first: HexKey, map: MapData): BrushOp | null {
   switch (tool) {
     case "terrain":
-      return { kind: "terrain", terrain: str("terrain"), difficulty: str("difficulty") as Difficulty };
+      return {
+        kind: "terrain",
+        terrain: str("terrain"),
+        difficulty: str("difficulty") as Difficulty,
+        encounterMod: str("encMod").trim() === "" ? null : Number(str("encMod")) || 0,
+      };
     case "region":
       return { kind: "region", regionId: str("regionId") || null };
     case "tags": {
@@ -91,10 +97,9 @@ function paint(key: HexKey): void {
   if (draft.stroke.includes(key)) return;
   draft.stroke.push(key);
   if (draft.working && strokeOp) {
-    draft.working = applyBrush(draft.working, [key], strokeOp, {
-      terrain: str("terrain"),
-      difficulty: str("difficulty") as Difficulty,
-    });
+    const working = draft.working;
+    const fallback: HexDefaults = { terrain: str("terrain"), difficulty: str("difficulty") as Difficulty, tags: [], encounterMod: 0 };
+    draft.working = applyBrush(working, [key], strokeOp, (regionId) => hexDefaultsFor(working, regionId, fallback));
   }
   drawLayer();
 }
@@ -210,6 +215,77 @@ function detachPointer(): void {
 
 // ---------- form saving ----------
 
+const tagList = (text: string) => text.split(",").map((t) => t.trim()).filter(Boolean);
+
+/** Read a defaults block (`<prefix>Terrain`, `Difficulty`, `Tags`, `Mod`); no terrain chosen = no defaults. */
+function defaultsFromForm(prefix: string): HexDefaults | undefined {
+  const terrain = str(`${prefix}Terrain`);
+  if (!terrain) return undefined;
+  return {
+    terrain,
+    difficulty: (str(`${prefix}Difficulty`) || "standard") as Difficulty,
+    tags: tagList(str(`${prefix}Tags`)),
+    encounterMod: Number(str(`${prefix}Mod`)) || 0,
+  };
+}
+
+function defaultsIntoForm(prefix: string, d: HexDefaults | undefined): void {
+  f[`${prefix}Terrain`] = d?.terrain ?? "";
+  f[`${prefix}Difficulty`] = d?.difficulty ?? "standard";
+  f[`${prefix}Tags`] = (d?.tags ?? []).join(", ");
+  f[`${prefix}Mod`] = d?.encounterMod ? String(d.encounterMod) : "";
+}
+
+/** Load the viewed scene's map defaults and rules into the painter form. */
+function mapFormFromScene(): void {
+  const map = store.getMap();
+  defaultsIntoForm("md.d", map.defaults);
+  f["md.table"] = map.rules?.encounterTable ?? "";
+  f["md.dcMods"] = formatDcMods(map.rules?.dcMods ?? {});
+  f["md.water"] = String(map.rules?.waterMultiplier ?? 1);
+  f["md.storm"] = map.rules?.stormThreshold == null ? "" : String(map.rules.stormThreshold);
+  f.mapColor = map.baseColor || DEFAULT_BASE_COLOR;
+}
+
+async function saveMapDefaults(): Promise<void> {
+  let dcMods: Record<string, number>;
+  try {
+    dcMods = parseDcMods(str("md.dcMods"));
+  } catch (err) {
+    return notify("error", (err as Error).message);
+  }
+  const storm = str("md.storm").trim();
+  const rules: MapRules = {
+    dcMods,
+    encounterTable: str("md.table").trim() || null,
+    waterMultiplier: Number(str("md.water")) || 1,
+    stormThreshold: storm === "" || Number.isNaN(Number(storm)) ? null : Number(storm),
+  };
+  const map = cloneMap();
+  map.rules = rules;
+  const defaults = defaultsFromForm("md.d");
+  if (defaults) map.defaults = defaults;
+  else delete map.defaults;
+  await store.setMap(map);
+  notify("info", "Map defaults saved.");
+}
+
+async function restampMap(): Promise<void> {
+  const current = store.getMap();
+  if (!current.defaults) return notify("warn", "Set and save the map's default terrain first.");
+  const dialog = foundry.applications?.api?.DialogV2;
+  const ok = dialog
+    ? await dialog.confirm({
+        window: { title: "Re-stamp region-less hexes" },
+        content: "<p>Reset terrain, difficulty, tags and encounter mod of every hex outside a region to the map defaults?</p>",
+      })
+    : true;
+  if (!ok) return;
+  const { map, count } = restampUnregioned(current);
+  await store.setMap(map);
+  notify("info", `Re-stamped ${count} hex${count === 1 ? "" : "es"}.`);
+}
+
 async function saveRegion(): Promise<void> {
   const name = str("rg.name").trim();
   if (!name) return notify("warn", "A region needs a name.");
@@ -229,6 +305,8 @@ async function saveRegion(): Promise<void> {
     waterMultiplier: Number(str("rg.water")) || 1,
     stormThreshold: storm === "" || Number.isNaN(Number(storm)) ? null : Number(storm),
   };
+  const defaults = defaultsFromForm("rg.d");
+  if (defaults) region.defaults = defaults;
   const map = cloneMap();
   map.regions[region.id] = region;
   await store.setMap(map);
@@ -279,8 +357,7 @@ function openRouteForm(route: Route | null): void {
 async function saveRoute(): Promise<void> {
   const r = draft.route;
   if (!r?.from || !r.hexes.length) return notify("warn", "Click a start hex and at least one more hex first.");
-  const name = str("rt.name").trim();
-  if (!name) return notify("warn", "A route needs a name.");
+  const name = str("rt.name").trim(); // optional: an unnamed route draws no label on the map
   let effects, prompts;
   try {
     effects = parseEffects(str("rt.effects"));
@@ -320,6 +397,8 @@ const checkbox = (name: string, label: string) =>
   `<label class="pf1hex-check"><input type="checkbox" name="${name}"${f[name] ? " checked" : ""}> ${label}</label>`;
 const textarea = (name: string, label: string, rows = 3) =>
   `<label>${label}<textarea name="${name}" rows="${rows}">${escapeHtml(str(name))}</textarea></label>`;
+const terrainSelect = (name: string, none: string) =>
+  `<label>Terrain <select name="${name}">${opt("", none, str(name))}${TERRAIN_KEYS.map((k) => opt(k, TERRAINS[k].label, str(name))).join("")}</select></label>`;
 const difficultySelect = (name: string) =>
   `<select name="${name}">${DIFFICULTIES.map((d) => opt(d, d, str(name))).join("")}</select>`;
 
@@ -330,7 +409,8 @@ function toolPanel(map: MapData): string {
     case "terrain":
       return `<label>Terrain <select name="terrain">${TERRAIN_KEYS.map((k) => opt(k, TERRAINS[k].label, str("terrain"))).join("")}</select></label>
         <label>Difficulty ${difficultySelect("difficulty")}</label>
-        <p class="hint">Drag on the map to paint.</p>`;
+        ${input("encMod", "Encounter mod (blank = keep)", "number")}
+        <p class="hint">Drag on the map to paint. New hexes start from their region's or the map's defaults.</p>`;
     case "region": {
       const list = regions
         .map(
@@ -347,6 +427,11 @@ function toolPanel(map: MapData): string {
               ${input("rg.table", "Encounter RollTable UUID")}
               ${input("rg.dcMods", "DC mods (role:mod, * = all)")}
               ${input("rg.water", "Water multiplier", "number")}${input("rg.storm", "Storm threshold", "number")}
+              <fieldset><legend>Defaults for new hexes</legend>
+                ${terrainSelect("rg.dTerrain", "(use map defaults)")}
+                <label>Difficulty ${difficultySelect("rg.dDifficulty")}</label>
+                ${input("rg.dTags", "Tags (comma-separated)")}${input("rg.dMod", "Encounter mod", "number")}
+              </fieldset>
               <div class="buttons"><button type="button" data-action="saveRegion">Save</button>
               <button type="button" data-action="cancelForm">Cancel</button></div></fieldset>`;
       return `<label>Brush region <select name="regionId">${opt("", "(none — clears region)", str("regionId"))}${regions
@@ -407,7 +492,7 @@ function listsHtml(map: MapData): string {
     .join("");
   const routes = Object.values(map.routes)
     .map(
-      (r) => `<li>${escapeHtml(r.name)} <span class="hint">${r.hexes.length} hexes · ${r.difficulty}${r.knownToParty ? "" : " · hidden"}</span>
+      (r) => `<li>${escapeHtml(routeLabel(r))} <span class="hint">${r.hexes.length} hexes · ${r.difficulty}${r.knownToParty ? "" : " · hidden"}</span>
         <button type="button" data-action="editRoute" data-id="${r.id}"><i class="fa-solid fa-pen"></i></button>
         <button type="button" data-action="deleteRoute" data-id="${r.id}"><i class="fa-solid fa-trash"></i></button></li>`,
     )
@@ -424,7 +509,24 @@ function renderPainter(): string {
     (t) => `<button type="button" class="${t.id === tool ? "active" : ""}" data-action="tool" data-tool="${t.id}" title="${t.label}">
       <i class="fa-solid ${t.icon}"></i> ${t.label}</button>`,
   ).join("");
-  return `<div class="pf1hex-tools">${tools}</div><div class="pf1hex-panel">${toolPanel(map)}</div>${listsHtml(map)}`;
+  const baseColor = map.baseColor || DEFAULT_BASE_COLOR;
+  const mapRow = `<div class="pf1hex-row" title="Border colour for hexes that are not in a region">
+    <label>Map border <input type="color" name="mapColor" value="${baseColor}"></label>
+    <button type="button" data-action="saveMapColor">Set</button></div>`;
+  const mapDefaults = `<details class="pf1hex-map-defaults"><summary>Map defaults &amp; rules (hexes outside any region)</summary>
+    <fieldset><legend>New hexes start as</legend>
+      ${terrainSelect("md.dTerrain", "(current terrain brush)")}
+      <label>Difficulty ${difficultySelect("md.dDifficulty")}</label>
+      ${input("md.dTags", "Tags (comma-separated)")}${input("md.dMod", "Encounter mod", "number")}
+    </fieldset>
+    <fieldset><legend>Travel rules</legend>
+      ${input("md.table", "Encounter RollTable UUID")}${input("md.dcMods", "DC mods (role:mod, * = all)")}
+      ${input("md.water", "Water multiplier", "number")}${input("md.storm", "Storm threshold", "number")}
+    </fieldset>
+    <div class="buttons"><button type="button" data-action="saveMapDefaults">Save</button>
+      <button type="button" data-action="restampMap" title="Reset terrain, difficulty, tags and encounter mod of every hex outside a region to the map defaults">Re-stamp region-less hexes</button></div>
+  </details>`;
+  return `${mapRow}${mapDefaults}<div class="pf1hex-tools">${tools}</div><div class="pf1hex-panel">${toolPanel(map)}</div>${listsHtml(map)}`;
 }
 
 // ---------- actions (called with this = app) ----------
@@ -452,6 +554,7 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
     guarded(() => {
       regionEdit = "";
       Object.assign(f, { "rg.name": "", "rg.color": "#cc3333", "rg.table": "", "rg.dcMods": "", "rg.water": "1", "rg.storm": "" });
+      defaultsIntoForm("rg.d", undefined);
     }),
   editRegion: (_e, t) =>
     guarded(() => {
@@ -466,8 +569,17 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
         "rg.water": String(r.waterMultiplier),
         "rg.storm": r.stormThreshold === null ? "" : String(r.stormThreshold),
       });
+      defaultsIntoForm("rg.d", r.defaults);
     }),
   saveRegion: () => guarded(saveRegion),
+  saveMapDefaults: () => guarded(saveMapDefaults),
+  restampMap: () => guarded(restampMap),
+  saveMapColor: () =>
+    guarded(async () => {
+      const map = cloneMap();
+      map.baseColor = str("mapColor") || DEFAULT_BASE_COLOR;
+      await store.setMap(map);
+    }),
   deleteRegion: (_e, t) => guarded(() => deleteRegion(id(t))),
   saveLandmark: () => guarded(saveLandmark),
   editLandmark: (_e, t) =>
@@ -581,6 +693,7 @@ function painterClass(): any {
 
 export function openPainter(): void {
   if (!game.user?.isGM) return;
+  mapFormFromScene();
   if (!app) {
     const Cls = painterClass();
     app = new Cls();

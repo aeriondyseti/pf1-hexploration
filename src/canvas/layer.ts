@@ -7,17 +7,18 @@ import { MODULE_ID } from "../types";
 import {
   DIFFICULTY_LETTER,
   TAG_GLYPH,
+  borderSegments,
   colorToNumber,
-  dashSegments,
+  hexKey,
   parseHexKey,
+  type BorderKind,
   polylineMidpoint,
   starPoints,
 } from "./helpers";
-import { draft, notify } from "./state";
+import { draft } from "./state";
 import { terrainFill } from "./terrain";
 
 let container: any = null;
-const warnedScenes = new Set<string>();
 
 const FILL_ALPHA = 0.55;
 const LABEL_FONT = "Signika, sans-serif";
@@ -66,31 +67,26 @@ export function drawLayer(): void {
   for (const child of root.removeChildren()) child.destroy({ children: true });
 
   const gm = !!game.user?.isGM;
-  if (!canvas.grid.isHexagonal) {
-    const sceneId = canvas.scene?.id;
-    if (gm && sceneId && !warnedScenes.has(sceneId)) {
-      warnedScenes.add(sceneId);
-      notify("info", "PF1 Hexploration: this scene needs a hexagonal grid to show the hex map.");
-    }
-    return;
-  }
+  // Battlemaps and other non-hex scenes: draw nothing (the scene controls hide our tools there).
+  if (!canvas.grid.isHexagonal) return;
 
   const map: MapData = gm ? draft.working ?? store.getMap() : store.partyView();
-  const knowledge = gm ? store.getPartyMap().knowledge : {};
   const size = canvas.grid.size;
 
-  drawHexes(root, map, knowledge, gm, size);
+  drawHexes(root, map, size);
   drawRoutes(root, map, size);
   drawLeg(root, map, size);
   if (gm) drawDrafts(root, size);
   drawLandmarks(root, map, size);
 }
 
-function drawHexes(root: any, map: MapData, knowledge: Record<HexKey, string>, gm: boolean, size: number): void {
+function drawHexes(root: any, map: MapData, size: number): void {
   const fills = new PIXI.Graphics();
   const outlines = new PIXI.Graphics();
   const labels = new PIXI.Container();
   root.addChild(fills, outlines, labels);
+
+  drawBorders(outlines, map, size);
 
   for (const hex of Object.values(map.hexes)) {
     const poly = vertices(hex.key);
@@ -98,23 +94,6 @@ function drawHexes(root: any, map: MapData, knowledge: Record<HexKey, string>, g
     fills.drawPolygon(poly);
     fills.endFill();
 
-    const region = hex.region ? map.regions[hex.region] : null;
-    if (region) {
-      outlines.lineStyle(Math.max(2, size / 25), colorToNumber(region.color), 0.9);
-      outlines.drawPolygon(poly);
-    }
-
-    // GM aid: hexes the party has not explored get a dashed dark outline.
-    if (gm && (knowledge[hex.key] ?? "unknown") === "unknown") {
-      outlines.lineStyle(Math.max(1, size / 50), 0x222222, 0.8);
-      const pts = canvas.grid.getVertices(parseHexKey(hex.key));
-      for (let n = 0; n < pts.length; n++) {
-        for (const [x1, y1, x2, y2] of dashSegments(pts[n], pts[(n + 1) % pts.length], size / 10, size / 14)) {
-          outlines.moveTo(x1, y1);
-          outlines.lineTo(x2, y2);
-        }
-      }
-    }
 
     const c = center(hex.key);
     const letter = text(DIFFICULTY_LETTER[hex.difficulty] ?? "?", size / 6, 0x333333);
@@ -130,6 +109,29 @@ function drawHexes(root: any, map: MapData, knowledge: Record<HexKey, string>, g
   }
 }
 
+const BORDER_WIDTH: Record<BorderKind, (size: number) => number> = {
+  base: (size) => Math.max(1, size / 50),
+  region: (size) => Math.max(2, size / 25),
+  double: (size) => Math.max(2, size / 32),
+};
+
+function drawBorders(g: any, map: MapData, size: number): void {
+  const segments = borderSegments(
+    map,
+    {
+      verticesOf: (key) => canvas.grid.getVertices(parseHexKey(key)),
+      centerOf: center,
+      neighbourAt: (p) => hexKey(canvas.grid.getOffset(p)),
+    },
+    BORDER_WIDTH.double(size) * 0.75,
+  );
+  for (const s of segments) {
+    g.lineStyle(BORDER_WIDTH[s.kind](size), colorToNumber(s.color), s.kind === "base" ? 0.8 : 0.95);
+    g.moveTo(s.x1, s.y1);
+    g.lineTo(s.x2, s.y2);
+  }
+}
+
 function drawPolyline(g: any, keys: HexKey[]): { x: number; y: number }[] {
   const pts = keys.map(center);
   pts.forEach((p, n) => (n ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
@@ -140,10 +142,15 @@ function drawRoutes(root: any, map: MapData, size: number): void {
   const g = new PIXI.Graphics();
   root.addChild(g);
   for (const route of Object.values(map.routes)) {
-    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, 0.85);
+    // Hidden routes only reach the GM's map (players draw partyView); show them faint.
+    const alpha = route.knownToParty ? 0.85 : 0.3;
+    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, alpha);
     const pts = drawPolyline(g, [route.from, ...route.hexes]);
+    const name = route.name?.trim();
+    if (!name) continue;
     const mid = polylineMidpoint(pts);
-    const label = text(route.name, size / 5, 0x5a2a08);
+    const label = text(name, size / 5, 0x5a2a08);
+    label.alpha = route.knownToParty ? 1 : 0.45;
     label.position.set(mid.x, mid.y - size * 0.12);
     root.addChild(label);
   }

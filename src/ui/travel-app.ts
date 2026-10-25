@@ -1,6 +1,6 @@
 // The Travel / Muster window (DESIGN §4.5). Every user opens it; the GM sees the controls.
 // Players' map and route data always come from store.partyView() (invariant 1).
-import { MODULE_ID, type LegState, type MapData, type Request, type RoleDef, type SupplyTrack } from "../types";
+import { MODULE_ID, routeLabel, type LegState, type MapData, type Request, type RoleDef, type SupplyTrack } from "../types";
 import { store } from "../store";
 import { engine, legRoleDc } from "../engine";
 import { authority } from "../authority";
@@ -130,7 +130,7 @@ function renderNoLeg(app: any, map: MapData, gm: boolean): string {
       ? `<h3>Known routes</h3><ul class="pf1hex-routes">${routes
           .map(
             (r) =>
-              `<li><b>${esc(r.name)}</b> — ${r.days}d, ${esc(r.difficulty)}${r.bargain ? `<br><i>${esc(r.bargain)}</i>` : ""}</li>`,
+              `<li><b>${esc(routeLabel(r))}</b> — ${r.days}d, ${esc(r.difficulty)}${r.bargain ? `<br><i>${esc(r.bargain)}</i>` : ""}</li>`,
           )
           .join("")}</ul>`
       : "";
@@ -148,7 +148,7 @@ function renderNoLeg(app: any, map: MapData, gm: boolean): string {
   const selected = app.selectedRouteId ? map.routes[app.selectedRouteId] : null;
   const opts = [
     option("", "— choose a route (or click one on the map) —"),
-    ...routes.map((r) => option(r.id, `${r.name} — ${r.days}d, ${r.difficulty}`, r.id === selected?.id)),
+    ...routes.map((r) => option(r.id, `${routeLabel(r)} — ${r.days}d, ${r.difficulty}`, r.id === selected?.id)),
   ];
   const bargain = selected?.bargain ? `<blockquote class="pf1hex-bargain">${esc(selected.bargain)}</blockquote>` : "";
   return `<section class="pf1hex-start">
@@ -168,7 +168,8 @@ function memberName(uuid: string | null): string {
 
 function roleDc(role: RoleDef, leg: LegState, map: MapData): number {
   try {
-    return legRoleDc(role, leg.plan, map.hexes, map.regions, store.getCaravan().roster);
+    const rules = engine.effectiveMap(map);
+    return legRoleDc(role, leg.plan, rules.hexes, rules.regions, store.getCaravan().roster);
   } catch {
     return role.baseDc;
   }
@@ -218,7 +219,7 @@ function renderMuster(leg: LegState, map: MapData, gm: boolean): string {
     : "";
 
   return `<section class="pf1hex-muster">
-  <h3>Muster — ${route ? esc(route.name) : "off-route"} · ${leg.plan.baseDays}d, ${esc(leg.plan.difficulty)}</h3>
+  <h3>Muster — ${route ? esc(routeLabel(route)) : "off-route"} · ${leg.plan.baseDays}d, ${esc(leg.plan.difficulty)}</h3>
   ${route?.bargain ? `<blockquote class="pf1hex-bargain">${esc(route.bargain)}</blockquote>` : ""}
   <table class="pf1hex-table">
     <thead><tr><th>Role</th><th>Skills</th><th>DC</th><th>Holder</th><th>Roll</th><th></th></tr></thead>

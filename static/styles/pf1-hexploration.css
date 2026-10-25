@@ -52,3 +52,21 @@
 .pf1hex-painter .pf1hex-list li { display: flex; align-items: center; gap: 0.3rem; padding: 0.1rem 0; }
 .pf1hex-painter .pf1hex-list li button { flex: 0 0 auto; width: auto; padding: 0 0.3rem; line-height: 1.4; }
 .pf1hex-painter .swatch { display: inline-block; width: 0.8rem; height: 0.8rem; border: 1px solid #000; }
+
+/* tooltip */
+.pf1hex-tooltip {
+  position: fixed;
+  z-index: 10000;
+  display: none;
+  max-width: 280px;
+  padding: 6px 8px;
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #f0f0e0;
+  background: rgba(20, 18, 14, 0.92);
+  border: 1px solid var(--color-border-highlight, #ff6400);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.pf1hex-tooltip strong { display: block; margin-bottom: 2px; }
