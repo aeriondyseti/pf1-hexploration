@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-25
+
+### Fixed
+- Roster edits (NPC, draft, food, water) save as soon as they change, and adding a member keeps edits still in
+  progress; adding an actor no longer resets every member back to NPC.
+
 ## [0.1.2] - 2026-10-25
 
 ### Added
