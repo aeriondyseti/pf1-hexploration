@@ -258,6 +258,39 @@ export interface CaravanSettings {
   forcedMarchStep: number; // +2 per consecutive day
 }
 
+// ---------- Caravan service results (hx.caravan) ----------
+
+export type CaravanErrorCode =
+  | "gm-only" // not the GM's client
+  | "leg-active" // place/unplace while a leg is mustering or underway
+  | "not-hex-scene" // the scene's grid isn't hexagonal
+  | "off-grid" // the hex isn't on the scene (or the scene doesn't exist)
+  | "no-caravan-actor" // no caravan designated or created yet
+  | "unknown-actor" // the UUID doesn't resolve
+  | "caravan-actor" // tried to add a caravan-type actor
+  | "duplicate" // the actor is already on the roster
+  | "not-member" // remove/update an actor who isn't on the roster
+  | "holds-role" // remove someone holding a role in the active leg (the error names the role)
+  | "bad-value" // negative food/water, non-integer draft count, malformed hex key, ...
+  | "failed"; // Foundry threw while applying the change (the error says what)
+
+/** Every hx.caravan write returns one of these; `error` is the sentence a person would see. */
+export type CaravanResult =
+  | { ok: true; caravan: CaravanState; ledgerId: string }
+  | { ok: false; code: CaravanErrorCode; error: string };
+
+export interface MemberOpts {
+  draft?: boolean;
+  npc?: boolean;
+}
+
+export interface MemberPatch {
+  draft?: boolean;
+  npc?: boolean;
+  food?: number;
+  water?: number;
+}
+
 /** Importable content pack (campaign data lives outside the module repo, DESIGN §4.12). */
 export interface Pack {
   format: "pf1-hexploration-pack";
@@ -277,7 +310,9 @@ export type Change =
   | { kind: "knowledge"; sceneId: string; key: HexKey; before: KnowledgeState; after: KnowledgeState }
   | { kind: "caravan"; before: CaravanState; after: CaravanState }
   | { kind: "token"; tokenUuid: string; before: { x: number; y: number }; after: { x: number; y: number } }
-  | { kind: "worldTime"; seconds: number };
+  | { kind: "worldTime"; seconds: number }
+  | { kind: "tokenCreate"; tokenUuid: string } // undo deletes the token
+  | { kind: "tokenDelete"; sceneId: string; data: Record<string, unknown> }; // undo recreates it
 
 export interface LedgerEntry {
   id: string;

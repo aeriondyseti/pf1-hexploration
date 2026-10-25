@@ -8,6 +8,7 @@ import { hexCanvas } from "./canvas";
 import { hexUi } from "./ui";
 import { engine } from "./engine";
 import { registerCaravanType } from "./model";
+import { caravan } from "./caravan";
 
 Hooks.once("init", () => {
   store.registerSettings();
@@ -20,5 +21,5 @@ Hooks.once("ready", () => {
   authority.init();
   travel.init();
   const mod = game.modules.get(MODULE_ID);
-  if (mod) mod.api = { store, authority, ledger, pf1: pf1Adapter, travel, canvas: hexCanvas, ui: hexUi, engine };
+  if (mod) mod.api = { store, authority, ledger, pf1: pf1Adapter, travel, caravan, canvas: hexCanvas, ui: hexUi, engine };
 });

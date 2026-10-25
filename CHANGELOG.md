@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-25
+
+### Added
+- `hx.caravan`, a caravan service for agents and macros: `place` / `unplace` the caravan token (its position follows
+  the token), `add` / `remove` / `update` roster members, `setDraftRequired`, and `get` / `member` / `findMember`.
+  Every write returns `{ ok, caravan, ledgerId }` or `{ ok: false, code, error }` and records one undo entry
+  (ADR-0007).
+
+### Changed
+- The Caravan window, Place on map and dragging the caravan onto the scene all go through `hx.caravan`, so a refused
+  change (a duplicate, removing a role-holder mid-leg, moving the caravan during a leg) gives the same reason everywhere.
+- Undo can now remove a token the caravan placed, and restore one it removed.
+
 ## [0.1.9] - 2026-10-25
 
 ### Added

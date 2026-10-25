@@ -1,6 +1,7 @@
 // The Caravan window: roster, hold, wagon and pack import/export. Everyone views; the GM edits.
-import { MODULE_ID, CARAVAN_TOKEN, CARAVAN_TYPE, type CaravanState, type Pack, type RosterMember, type SupplyTrack } from "../types";
+import { MODULE_ID, CARAVAN_TOKEN, CARAVAN_TYPE, type CaravanState, type Pack, type MemberPatch, type RosterMember, type SupplyTrack } from "../types";
 import { store } from "../store";
+import { caravan as caravanService } from "../caravan";
 import { ledger } from "../ledger";
 import { pf1Adapter } from "../pf1";
 import { attempt, dragData, esc, option, rerenderer, toast } from "./html";
@@ -53,7 +54,7 @@ export function caravanAppClass(): any {
       // Drop actors from the sidebar anywhere on the window to add them to the roster.
       const el: HTMLElement = this.element;
       el.addEventListener("dragover", (event) => event.preventDefault());
-      el.addEventListener("drop", (event) => void dropActorOnRoster(event, rosterFromForm(this)));
+      el.addEventListener("drop", (event) => void dropActorOnRoster(event));
       // Roster edits save as they are made, so a re-render (e.g. adding a member) never discards them.
       el.addEventListener("change", (event) => {
         if ((event.target as HTMLElement)?.closest?.("tr[data-index]")) void onSaveRoster.call(this);
@@ -226,23 +227,23 @@ function onPlaceToken(this: any) {
 }
 
 /**
- * GM: create the caravan's linked token on the viewed scene, centred on the hex under `point`
- * (default: the view centre). Pans to it instead if the caravan is already on the scene.
+ * GM: put the caravan on the viewed scene at the hex under `point` (default: the view centre) through
+ * hx.caravan.place, which creates or moves its linked token and records its position. With no point and the
+ * caravan already on this scene, pans to it instead.
  */
 export async function placeCaravanToken(actor: any, point: { x: number; y: number } | null): Promise<void> {
   const scene = canvas?.scene;
   if (!scene) return toast("View a scene first.", "warn");
   const existing = scene.tokens?.find((t: any) => t.actorId === actor.id);
-  if (existing) {
+  if (existing && !point) {
     await canvas.animatePan?.({ x: existing.x, y: existing.y });
     return toast("The caravan is already on this scene.");
   }
   const at = point ?? { x: canvas.stage.pivot.x, y: canvas.stage.pivot.y };
-  const center = canvas.grid.getCenterPoint(canvas.grid.getOffset(at));
-  const size = canvas.grid.size;
-  const token = await actor.getTokenDocument({ ...CARAVAN_TOKEN, x: center.x - size / 2, y: center.y - size / 2 });
-  await scene.createEmbeddedDocuments("Token", [token.toObject()]);
-  toast("Caravan placed on the map.");
+  const o = canvas.grid.getOffset(at);
+  const result = await caravanService.place(`${o.i},${o.j}`, scene.id);
+  if (result.ok) toast("Caravan placed on the map.");
+  else toast(result.error, "warn");
 }
 
 function onCreateCaravan(this: any) {
@@ -259,42 +260,36 @@ function onAddMember(this: any) {
     if (!uuid) return;
     const actor = await fromUuid(uuid);
     if (!actor) return toast("Actor not found.", "warn");
-    await addToRoster(actor, !!field(this, "input[name=addDraft]")?.checked, rosterFromForm(this));
+    await addToRoster(actor, !!field(this, "input[name=addDraft]")?.checked);
   });
 }
 
 /** GM: add an actor to the active caravan's roster (caravans and actors already aboard are refused). */
-/** `current` is the roster as shown in the window (including unsaved row edits); defaults to the saved roster. */
-export async function addToRoster(actor: any, draft = false, current?: RosterMember[]): Promise<void> {
-  if (!game.user?.isGM) return toast("Only the GM can change the roster.", "warn");
-  if (!store.getCaravanActor()) return toast("Set or create a caravan first.", "warn");
-  if (actor.type === CARAVAN_TYPE) return toast("A caravan can't join a roster.", "warn");
-  const caravan = store.getCaravan();
-  const roster = current ?? caravan.roster;
-  if (roster.some((m) => m.actorUuid === actor.uuid)) return toast(`${actor.name} is already on the roster.`, "info");
-  const member = pf1Adapter.rosterMemberFor(actor, draft);
-  await saveCaravan("Edit roster", { ...caravan, roster: [...roster, member] });
-  toast(`${actor.name} joined the roster.`);
+/** GM: add an actor to the roster through hx.caravan (the one code path), toasting the outcome. */
+export async function addToRoster(actor: any, draft = false): Promise<void> {
+  const result = await caravanService.add(actor.uuid, { draft });
+  if (result.ok) toast(`${actor.name} joined the roster.`);
+  else toast(result.error, result.code === "duplicate" ? "info" : "warn");
 }
 
 /** Drop handler: an Actor dragged from the sidebar (or a token's actor) joins the roster. Returns true if handled. */
-export async function dropActorOnRoster(event: DragEvent, current?: RosterMember[]): Promise<boolean> {
+export async function dropActorOnRoster(event: DragEvent): Promise<boolean> {
   event.preventDefault();
   const data = dragData(event);
   if (data?.type !== "Actor" || !data.uuid) return false;
   await attempt(async () => {
     const actor = await fromUuid(data.uuid);
-    if (actor) await addToRoster(actor, false, current);
+    if (actor) await addToRoster(actor);
   });
   return true;
 }
 
 function onRemoveMember(_event: Event, target: HTMLElement) {
   return attempt(async () => {
-    const idx = Number(target.dataset.index);
-    const caravan = store.getCaravan();
-    const roster = caravan.roster.filter((_, i) => i !== idx);
-    await saveCaravan("Edit roster", { ...caravan, roster });
+    const member = store.getCaravan().roster[Number(target.dataset.index)];
+    if (!member) return;
+    const result = await caravanService.remove(member.actorUuid);
+    if (!result.ok) toast(result.error, "warn");
   });
 }
 
@@ -314,10 +309,16 @@ export function rosterFromForm(app: any): RosterMember[] {
 
 function onSaveRoster(this: any) {
   return attempt(async () => {
-    const caravan = store.getCaravan();
-    const roster = rosterFromForm(this);
-    if (JSON.stringify(roster) === JSON.stringify(caravan.roster)) return;
-    await saveCaravan("Edit roster", { ...caravan, roster });
+    const saved = store.getCaravan().roster;
+    for (const shown of rosterFromForm(this)) {
+      const was = saved.find((m) => m.actorUuid === shown.actorUuid);
+      if (!was) continue;
+      const patch: MemberPatch = {};
+      for (const key of ["food", "water", "draft", "npc"] as const) if (shown[key] !== was[key]) (patch as any)[key] = shown[key];
+      if (!Object.keys(patch).length) continue;
+      const result = await caravanService.update(shown.actorUuid, patch);
+      if (!result.ok) return toast(result.error, "warn");
+    }
   });
 }
 
@@ -330,11 +331,14 @@ function onSaveWagon(this: any) {
     };
     const max = int("wagonMax", caravan.wagon.max);
     const condition = Math.min(int("wagonCondition", caravan.wagon.condition), max);
-    await saveCaravan("Edit wagon", {
-      ...caravan,
-      wagon: { condition, max },
-      draftRequired: int("draftRequired", caravan.draftRequired),
-    });
+    if (condition !== caravan.wagon.condition || max !== caravan.wagon.max) {
+      await saveCaravan("Edit wagon", { ...caravan, wagon: { condition, max } });
+    }
+    const draft = int("draftRequired", caravan.draftRequired);
+    if (draft !== caravan.draftRequired) {
+      const result = await caravanService.setDraftRequired(draft);
+      if (!result.ok) toast(result.error, "warn");
+    }
   });
 }
 

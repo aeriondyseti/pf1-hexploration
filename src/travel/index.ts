@@ -75,7 +75,8 @@ function parseKey(key: HexKey): { i: number; j: number } {
 // Every caravan read-modify-write on the GM runs through this one queue, so a player request handled
 // during a day step's awaits cannot be overwritten by it (and ledger snapshots stay true).
 let chain: Promise<unknown> = Promise.resolve();
-function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+/** Serialise every GM caravan write (leg steps, request handlers, hx.caravan) so none interleave. */
+export function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   const run = chain.then(fn, fn);
   chain = run.catch(() => undefined);
   return run;
