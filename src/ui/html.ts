@@ -55,3 +55,14 @@ export function rerenderer(app: any): () => void {
     });
   };
 }
+
+/** Foundry drag payload ({type, uuid}) from a drop event, or null. */
+export function dragData(event: DragEvent): any | null {
+  try {
+    const editor = foundry.applications?.ux?.TextEditor?.implementation ?? (globalThis as any).TextEditor;
+    if (editor?.getDragEventData) return editor.getDragEventData(event);
+    return JSON.parse(event.dataTransfer?.getData("text/plain") || "null");
+  } catch {
+    return null;
+  }
+}

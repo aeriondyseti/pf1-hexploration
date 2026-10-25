@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-25
+
+### Added
+- Drag actors from the sidebar onto the Caravan window or the active caravan's sheet to add them to the roster.
+
 ## [0.1.1] - 2026-10-25
 
 ### Fixed

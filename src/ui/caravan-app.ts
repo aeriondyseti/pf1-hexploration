@@ -3,7 +3,7 @@ import { MODULE_ID, CARAVAN_TYPE, type CaravanState, type Pack, type RosterMembe
 import { store } from "../store";
 import { ledger } from "../ledger";
 import { pf1Adapter } from "../pf1";
-import { attempt, esc, option, rerenderer, toast } from "./html";
+import { attempt, dragData, esc, option, rerenderer, toast } from "./html";
 
 // Item flag keys the store reads for the hold (src/store supplyItems; not named in the contracts).
 export const SUPPLY_FLAG = "supply";
@@ -49,6 +49,10 @@ export function caravanAppClass(): any {
     async _onFirstRender(...args: any[]): Promise<void> {
       await super._onFirstRender?.(...args);
       this.unsubscribe = store.onChange(rerenderer(this));
+      // Drop actors from the sidebar anywhere on the window to add them to the roster.
+      const el: HTMLElement = this.element;
+      el.addEventListener("dragover", (event) => event.preventDefault());
+      el.addEventListener("drop", (event) => void dropActorOnRoster(event));
     }
 
     _onClose(...args: any[]): void {
@@ -165,7 +169,7 @@ ${items
     : "";
 
   return `${actorSection}
-<section><h3>Roster</h3>
+<section><h3>Roster</h3>${gm ? `<p class="pf1hex-note">Drag actors from the sidebar onto this window to add them.</p>` : ""}
 <table class="pf1hex-table"><thead><tr><th>Name</th><th>Food/day</th><th>Water/day</th><th>Draft</th><th>NPC</th><th></th></tr></thead>
 <tbody>${rosterRows.join("") || `<tr><td colspan="6"><i>Empty</i></td></tr>`}</tbody></table>
 ${rosterFooter}</section>
@@ -216,11 +220,32 @@ function onAddMember(this: any) {
     if (!uuid) return;
     const actor = await fromUuid(uuid);
     if (!actor) return toast("Actor not found.", "warn");
-    const draft = !!field(this, "input[name=addDraft]")?.checked;
-    const caravan = store.getCaravan();
-    const member = pf1Adapter.rosterMemberFor(actor, draft);
-    await saveCaravan("Edit roster", { ...caravan, roster: [...caravan.roster, member] });
+    await addToRoster(actor, !!field(this, "input[name=addDraft]")?.checked);
   });
+}
+
+/** GM: add an actor to the active caravan's roster (caravans and actors already aboard are refused). */
+export async function addToRoster(actor: any, draft = false): Promise<void> {
+  if (!game.user?.isGM) return toast("Only the GM can change the roster.", "warn");
+  if (!store.getCaravanActor()) return toast("Set or create a caravan first.", "warn");
+  if (actor.type === CARAVAN_TYPE) return toast("A caravan can't join a roster.", "warn");
+  const caravan = store.getCaravan();
+  if (caravan.roster.some((m) => m.actorUuid === actor.uuid)) return toast(`${actor.name} is already on the roster.`, "info");
+  const member = pf1Adapter.rosterMemberFor(actor, draft);
+  await saveCaravan("Edit roster", { ...caravan, roster: [...caravan.roster, member] });
+  toast(`${actor.name} joined the roster.`);
+}
+
+/** Drop handler: an Actor dragged from the sidebar (or a token's actor) joins the roster. Returns true if handled. */
+export async function dropActorOnRoster(event: DragEvent): Promise<boolean> {
+  event.preventDefault();
+  const data = dragData(event);
+  if (data?.type !== "Actor" || !data.uuid) return false;
+  await attempt(async () => {
+    const actor = await fromUuid(data.uuid);
+    if (actor) await addToRoster(actor);
+  });
+  return true;
 }
 
 function onRemoveMember(_event: Event, target: HTMLElement) {
