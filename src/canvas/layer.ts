@@ -10,6 +10,7 @@ import {
   borderSegments,
   colorToNumber,
   hexKey,
+  parseColor,
   parseHexKey,
   type BorderKind,
   polylineMidpoint,
@@ -22,6 +23,7 @@ import { terrainFill } from "./terrain";
 let container: any = null;
 
 const FILL_ALPHA = 0.55;
+const ROUTE_COLOR = 0x7a3b10; // default route brown
 const LABEL_FONT = "Signika, sans-serif";
 
 function center(key: HexKey): { x: number; y: number } {
@@ -131,7 +133,8 @@ function drawBorders(g: any, map: MapData, size: number): void {
     BORDER_WIDTH.double(size) * 0.75,
   );
   for (const s of segments) {
-    g.lineStyle(BORDER_WIDTH[s.kind](size), colorToNumber(s.color), s.kind === "base" ? 0.8 : 0.95);
+    const { rgb, alpha } = parseColor(s.color);
+    g.lineStyle(BORDER_WIDTH[s.kind](size), rgb, (s.kind === "base" ? 0.8 : 0.95) * alpha);
     g.moveTo(s.x1, s.y1);
     g.lineTo(s.x2, s.y2);
   }
@@ -149,8 +152,9 @@ function drawRoutes(root: any, map: MapData, size: number, view: ViewOptions, gm
   for (const route of Object.values(map.routes)) {
     // Hidden routes only reach the GM's map (players draw partyView); show them faint, or not at all.
     if (gm && !route.knownToParty && !view.hiddenRoutes) continue;
-    const alpha = route.knownToParty ? 0.85 : 0.3;
-    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, view.routes ? alpha : 0);
+    const color = parseColor(route.color, ROUTE_COLOR);
+    const alpha = (route.knownToParty ? 0.85 : 0.3) * color.alpha;
+    g.lineStyle(Math.max(2, size / 16), color.rgb, view.routes ? alpha : 0);
     const pts = drawPolyline(g, [route.from, ...route.hexes]);
     const name = route.name?.trim();
     if (!name || !view.routeNames) continue;

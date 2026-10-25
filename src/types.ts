@@ -104,6 +104,7 @@ export interface Route {
   difficulty: Difficulty;
   encounterBonus: number;
   bargain: string; // player-facing pitch
+  color?: string; // "#rrggbb" or "#rrggbbaa"; default brown
   effects: RouteEffect[];
   prompts: GmPrompt[];
   knownToParty: boolean;

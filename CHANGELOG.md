@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-25
+
+### Added
+- Colours accept an alpha channel (`#rrggbbaa` or `#rgba`) everywhere they are drawn. The Hex Painter's region
+  colour, map border colour and the new per-route line colour each have an opacity slider beside the picker.
+- Routes can have their own line colour (default brown); hidden routes stay faint on top of it.
+
+### Fixed
+- An 8-digit colour such as `#7b5ea780` no longer falls back to grey.
+
 ## [0.1.11] - 2026-10-25
 
 ### Added

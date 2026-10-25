@@ -76,3 +76,8 @@
 .pf1hex-view .pf1hex-check { display: flex; align-items: center; gap: 0.4rem; }
 .pf1hex-view .buttons { margin-top: 0.4rem; }
 .pf1hex-view .hint { margin: 0.25rem 0 0; font-size: 0.85em; opacity: 0.75; }
+
+/* colour + opacity fields */
+.pf1hex-color { display: flex; align-items: center; gap: 0.35rem; }
+.pf1hex-color input[type="range"] { flex: 1; min-width: 4rem; }
+.pf1hex-color .hint { min-width: 2.5rem; text-align: right; }

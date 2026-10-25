@@ -4,6 +4,8 @@ import { store } from "../store";
 import type { Difficulty, HexDefaults, HexKey, KnowledgeState, Landmark, MapData, MapRules, Region, Route } from "../types";
 import { DIFFICULTIES, ENCOUNTER_BONUS, MODULE_ID, UC_TAGS, routeLabel } from "../types";
 import {
+  joinColor,
+  splitColor,
   applyBrush,
   hexDefaultsFor,
   restampUnregioned,
@@ -215,6 +217,13 @@ function detachPointer(): void {
 
 // ---------- form saving ----------
 
+const ROUTE_DEFAULT_COLOR = "#7a3b10";
+/** The route form's colour, omitted when it is the default opaque brown. */
+function routeColor(): { color?: string } {
+  const color = colorFromForm("rt.color", ROUTE_DEFAULT_COLOR);
+  return color === ROUTE_DEFAULT_COLOR ? {} : { color };
+}
+
 const tagList = (text: string) => text.split(",").map((t) => t.trim()).filter(Boolean);
 
 /** Read a defaults block (`<prefix>Terrain`, `Difficulty`, `Tags`, `Mod`); no terrain chosen = no defaults. */
@@ -244,7 +253,7 @@ function mapFormFromScene(): void {
   f["md.dcMods"] = formatDcMods(map.rules?.dcMods ?? {});
   f["md.water"] = String(map.rules?.waterMultiplier ?? 1);
   f["md.storm"] = map.rules?.stormThreshold == null ? "" : String(map.rules.stormThreshold);
-  f.mapColor = map.baseColor || DEFAULT_BASE_COLOR;
+  colorIntoForm("mapColor", map.baseColor, DEFAULT_BASE_COLOR);
 }
 
 async function saveMapDefaults(): Promise<void> {
@@ -299,7 +308,7 @@ async function saveRegion(): Promise<void> {
   const region: Region = {
     id: regionEdit || randomId(),
     name,
-    color: str("rg.color") || "#cc3333",
+    color: colorFromForm("rg.color", "#cc3333"),
     encounterTable: str("rg.table").trim() || null,
     dcMods,
     waterMultiplier: Number(str("rg.water")) || 1,
@@ -349,6 +358,7 @@ function openRouteForm(route: Route | null): void {
   f["rt.difficulty"] = difficulty;
   f["rt.bonus"] = String(route?.encounterBonus ?? ENCOUNTER_BONUS[difficulty]);
   f["rt.bargain"] = route?.bargain ?? "";
+  colorIntoForm("rt.color", route?.color, ROUTE_DEFAULT_COLOR);
   f["rt.known"] = route?.knownToParty ?? false;
   f["rt.effects"] = JSON.stringify(route?.effects ?? [], null, 1);
   f["rt.prompts"] = JSON.stringify(route?.prompts ?? [], null, 1);
@@ -376,6 +386,7 @@ async function saveRoute(): Promise<void> {
     difficulty,
     encounterBonus: bonus === "" || Number.isNaN(Number(bonus)) ? ENCOUNTER_BONUS[difficulty] : Number(bonus),
     bargain: str("rt.bargain"),
+    ...routeColor(),
     effects,
     prompts,
     knownToParty: !!f["rt.known"],
@@ -399,6 +410,20 @@ const textarea = (name: string, label: string, rows = 3) =>
   `<label>${label}<textarea name="${name}" rows="${rows}">${escapeHtml(str(name))}</textarea></label>`;
 const terrainSelect = (name: string, none: string) =>
   `<label>Terrain <select name="${name}">${opt("", none, str(name))}${TERRAIN_KEYS.map((k) => opt(k, TERRAINS[k].label, str(name))).join("")}</select></label>`;
+/** A colour picker plus an opacity slider, stored in the form as `<name>.hex` / `<name>.alpha` (0–100). */
+const colorField = (name: string, label: string) =>
+  `<label class="pf1hex-color">${label} <input type="color" name="${name}.hex" value="${escapeHtml(str(`${name}.hex`) || "#888888")}">
+    <input type="range" name="${name}.alpha" min="0" max="100" step="5" value="${escapeHtml(str(`${name}.alpha`) || "100")}"
+      title="Opacity"><span class="hint">${escapeHtml(str(`${name}.alpha`) || "100")}%</span></label>`;
+/** Load a stored colour into a colour field. */
+function colorIntoForm(name: string, color: string | null | undefined, fallback: string): void {
+  const { hex, alpha } = splitColor(color || fallback, fallback);
+  f[`${name}.hex`] = hex;
+  f[`${name}.alpha`] = String(Math.round(alpha * 100));
+}
+/** Read a colour field back as "#rrggbb" or "#rrggbbaa". */
+const colorFromForm = (name: string, fallback: string) =>
+  joinColor(str(`${name}.hex`) || fallback, str(`${name}.alpha`) === "" ? 1 : Number(str(`${name}.alpha`)) / 100);
 const difficultySelect = (name: string) =>
   `<select name="${name}">${DIFFICULTIES.map((d) => opt(d, d, str(name))).join("")}</select>`;
 
@@ -423,7 +448,7 @@ function toolPanel(map: MapData): string {
         regionEdit === null
           ? `<button type="button" data-action="newRegion"><i class="fa-solid fa-plus"></i> New region</button>`
           : `<fieldset><legend>${regionEdit ? "Edit" : "New"} region</legend>
-              ${input("rg.name", "Name")}${input("rg.color", "Colour", "color")}
+              ${input("rg.name", "Name")}${colorField("rg.color", "Colour")}
               ${input("rg.table", "Encounter RollTable UUID")}
               ${input("rg.dcMods", "DC mods (role:mod, * = all)")}
               ${input("rg.water", "Water multiplier", "number")}${input("rg.storm", "Storm threshold", "number")}
@@ -462,7 +487,8 @@ function toolPanel(map: MapData): string {
         : "Click the start hex, then each adjacent hex in order.";
       const form = routeFormOpen
         ? `<fieldset><legend>${r?.id ? "Edit" : "New"} route</legend>
-            ${input("rt.name", "Name")}${input("rt.days", "Days", "number")}
+            ${input("rt.name", "Name (optional)")}${input("rt.days", "Days", "number")}
+            ${colorField("rt.color", "Line colour")}
             <label>Difficulty ${difficultySelect("rt.difficulty")}</label>
             ${input("rt.bonus", "Encounter bonus (blank = by difficulty)", "number")}
             ${textarea("rt.bargain", "Bargain (player-facing)", 2)}${checkbox("rt.known", "Known to party")}
@@ -509,9 +535,8 @@ function renderPainter(): string {
     (t) => `<button type="button" class="${t.id === tool ? "active" : ""}" data-action="tool" data-tool="${t.id}" title="${t.label}">
       <i class="fa-solid ${t.icon}"></i> ${t.label}</button>`,
   ).join("");
-  const baseColor = map.baseColor || DEFAULT_BASE_COLOR;
   const mapRow = `<div class="pf1hex-row" title="Border colour for hexes that are not in a region">
-    <label>Map border <input type="color" name="mapColor" value="${baseColor}"></label>
+    ${colorField("mapColor", "Map border")}
     <button type="button" data-action="saveMapColor">Set</button></div>`;
   const mapDefaults = `<details class="pf1hex-map-defaults"><summary>Map defaults &amp; rules (hexes outside any region)</summary>
     <fieldset><legend>New hexes start as</legend>
@@ -553,7 +578,8 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
   newRegion: () =>
     guarded(() => {
       regionEdit = "";
-      Object.assign(f, { "rg.name": "", "rg.color": "#cc3333", "rg.table": "", "rg.dcMods": "", "rg.water": "1", "rg.storm": "" });
+      Object.assign(f, { "rg.name": "", "rg.table": "", "rg.dcMods": "", "rg.water": "1", "rg.storm": "" });
+      colorIntoForm("rg.color", null, "#cc3333");
       defaultsIntoForm("rg.d", undefined);
     }),
   editRegion: (_e, t) =>
@@ -563,13 +589,13 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
       regionEdit = r.id;
       Object.assign(f, {
         "rg.name": r.name,
-        "rg.color": r.color,
         "rg.table": r.encounterTable ?? "",
         "rg.dcMods": formatDcMods(r.dcMods),
         "rg.water": String(r.waterMultiplier),
         "rg.storm": r.stormThreshold === null ? "" : String(r.stormThreshold),
       });
       defaultsIntoForm("rg.d", r.defaults);
+      colorIntoForm("rg.color", r.color, "#cc3333");
     }),
   saveRegion: () => guarded(saveRegion),
   saveMapDefaults: () => guarded(saveMapDefaults),
@@ -577,7 +603,7 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
   saveMapColor: () =>
     guarded(async () => {
       const map = cloneMap();
-      map.baseColor = str("mapColor") || DEFAULT_BASE_COLOR;
+      map.baseColor = colorFromForm("mapColor", DEFAULT_BASE_COLOR);
       await store.setMap(map);
     }),
   deleteRegion: (_e, t) => guarded(() => deleteRegion(id(t))),
@@ -638,6 +664,10 @@ function onFieldChange(event: Event): void {
   const el = event.target as HTMLInputElement;
   if (!el?.name) return;
   f[el.name] = el.type === "checkbox" ? el.checked : el.value;
+  if (el.type === "range") {
+    const readout = el.parentElement?.querySelector(".hint");
+    if (readout) readout.textContent = `${el.value}%`;
+  }
   if (event.type !== "change") return;
   if (el.name === "terrain") {
     f.difficulty = TERRAINS[el.value]?.difficulty ?? f.difficulty;

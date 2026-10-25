@@ -188,11 +188,38 @@ export function parsePrompts(text: string): GmPrompt[] {
 }
 
 /** "#rrggbb" / "#rgb" -> 0xrrggbb; anything else -> fallback. */
+/**
+ * Parse "#rgb", "#rgba", "#rrggbb" or "#rrggbbaa" into a PIXI colour number and an alpha in [0, 1]
+ * (opaque when the colour has no alpha). Anything else gives `fallback`, opaque.
+ */
+export function parseColor(color: string | null | undefined, fallback = 0x888888): { rgb: number; alpha: number } {
+  let hex = (color ?? "").trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3,4}$/i.test(hex)) hex = [...hex].map((c) => c + c).join("");
+  if (/^[0-9a-f]{6}$/i.test(hex)) return { rgb: parseInt(hex, 16), alpha: 1 };
+  if (/^[0-9a-f]{8}$/i.test(hex)) return { rgb: parseInt(hex.slice(0, 6), 16), alpha: parseInt(hex.slice(6), 16) / 255 };
+  return { rgb: fallback, alpha: 1 };
+}
+
 export function colorToNumber(color: string | null | undefined, fallback = 0x888888): number {
-  if (!color) return fallback;
-  let hex = color.trim().replace(/^#/, "");
-  if (/^[0-9a-f]{3}$/i.test(hex)) hex = [...hex].map((c) => c + c).join("");
-  return /^[0-9a-f]{6}$/i.test(hex) ? parseInt(hex, 16) : fallback;
+  return parseColor(color, fallback).rgb;
+}
+
+/** The colour's own alpha (1 when it has none). */
+export function colorAlpha(color: string | null | undefined): number {
+  return parseColor(color).alpha;
+}
+
+/** Split a colour into what a colour picker shows ("#rrggbb") and an opacity in [0, 1]. */
+export function splitColor(color: string | null | undefined, fallback = "#888888"): { hex: string; alpha: number } {
+  const { rgb, alpha } = parseColor(color, parseColor(fallback).rgb);
+  return { hex: `#${rgb.toString(16).padStart(6, "0")}`, alpha };
+}
+
+/** Join a picker value and an opacity in [0, 1]: "#rrggbb" when opaque, else "#rrggbbaa". */
+export function joinColor(hex: string, alpha: number): string {
+  const base = splitColor(hex).hex;
+  const a = Math.round(Math.min(1, Math.max(0, Number.isFinite(alpha) ? alpha : 1)) * 255);
+  return a >= 255 ? base : `${base}${a.toString(16).padStart(2, "0")}`;
 }
 
 /** Flat [x, y, ...] polygon of a star. */

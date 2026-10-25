@@ -122,7 +122,8 @@ export function renderMiniMap(map: MapData, opts: MiniMapOptions): string {
     if (!pts) return "";
     const selected = route.id === opts.selectedRouteId;
     const action = opts.routesClickable ? ` data-action="pickRoute" data-route-id="${esc(route.id)}"` : "";
-    return `<polyline class="route${selected ? " selected" : ""}" points="${pts}"${action}><title>${esc(
+    const stroke = route.color && !selected ? ` style="stroke:${esc(route.color)}"` : "";
+    return `<polyline class="route${selected ? " selected" : ""}" points="${pts}"${stroke}${action}><title>${esc(
       `${route.name} — ${route.days}d, ${route.difficulty}`,
     )}</title></polyline>`;
   });
