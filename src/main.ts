@@ -7,9 +7,11 @@ import { travel } from "./travel";
 import { hexCanvas } from "./canvas";
 import { hexUi } from "./ui";
 import { engine } from "./engine";
+import { registerCaravanType } from "./model";
 
 Hooks.once("init", () => {
   store.registerSettings();
+  registerCaravanType();
   hexCanvas.register();
   hexUi.register();
 });

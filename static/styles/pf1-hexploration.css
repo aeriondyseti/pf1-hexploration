@@ -1,1 +1,54 @@
 /* PF1 Hexploration styles */
+
+/* ui */
+.pf1hex .window-content { display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; }
+.pf1hex h2, .pf1hex h3, .pf1hex h4 { margin: 0.25rem 0; border: none; }
+.pf1hex .pf1hex-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.25rem 0; }
+.pf1hex .pf1hex-row select, .pf1hex .pf1hex-row input[type="text"] { flex: 1 1 10rem; min-width: 0; }
+.pf1hex .pf1hex-row input[type="number"] { width: 4.5rem; }
+.pf1hex button { width: auto; flex: 0 0 auto; }
+.pf1hex button.active { box-shadow: 0 0 0 2px var(--color-border-highlight, #ff6400) inset; }
+.pf1hex .pf1hex-note { opacity: 0.8; font-style: italic; }
+.pf1hex .pf1hex-warn { color: var(--color-level-warning, #ee9b3a); font-weight: bold; font-size: 0.9em; }
+.pf1hex .pf1hex-bargain { margin: 0.25rem 0; padding: 0.25rem 0.5rem; border-left: 3px solid var(--color-border-highlight, #ff6400); font-style: italic; }
+.pf1hex .pf1hex-tracks ul { display: flex; flex-wrap: wrap; gap: 0.75rem; list-style: none; margin: 0; padding: 0; }
+.pf1hex .pf1hex-tracks li { display: flex; flex-direction: column; }
+.pf1hex .pf1hex-tracks li span { font-size: 0.8em; opacity: 0.75; }
+.pf1hex .pf1hex-table { width: 100%; border-collapse: collapse; margin: 0.25rem 0; }
+.pf1hex .pf1hex-table th, .pf1hex .pf1hex-table td { padding: 0.15rem 0.3rem; text-align: left; vertical-align: middle; }
+.pf1hex .pf1hex-table td.num { text-align: right; }
+.pf1hex .pf1hex-table input[type="number"] { width: 4rem; }
+.pf1hex .pf1hex-actions { display: flex; flex-wrap: wrap; gap: 0.2rem; justify-content: flex-end; }
+.pf1hex .pf1hex-actions select { max-width: 9rem; }
+.pf1hex .pf1hex-controls { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; margin-top: 0.5rem; }
+.pf1hex .pf1hex-outcomes, .pf1hex .pf1hex-saves, .pf1hex .pf1hex-prompts, .pf1hex .pf1hex-routes { margin: 0.25rem 0; padding-left: 1.2rem; }
+.pf1hex .pf1hex-outcomes li.success { color: var(--color-level-success, #3a9c4e); }
+.pf1hex .pf1hex-outcomes li.failure { color: var(--color-level-error, #c4453a); }
+.pf1hex .pf1hex-prompts li { font-style: italic; }
+.pf1hex .pf1hex-export, .pf1hex textarea { width: 100%; font-family: monospace; font-size: 0.85em; }
+.pf1hex .pf1hex-map { display: flex; justify-content: center; }
+.pf1hex .pf1hex-minimap { width: 100%; max-height: 260px; background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
+.pf1hex .pf1hex-minimap .hex { stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.6; }
+.pf1hex .pf1hex-minimap .route { fill: none; stroke: #f5e6b8; stroke-width: 1.4; stroke-dasharray: 3 2; opacity: 0.85; }
+.pf1hex .pf1hex-minimap .route[data-action] { cursor: pointer; stroke-width: 2.4; }
+.pf1hex .pf1hex-minimap .route.selected { stroke: #ffd24a; stroke-dasharray: none; opacity: 1; }
+.pf1hex .pf1hex-minimap .leg-path { fill: none; stroke: #ff6400; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.pf1hex .pf1hex-minimap .landmark { fill: #fff; stroke: #222; stroke-width: 0.8; }
+.pf1hex .pf1hex-minimap .caravan { fill: #ff6400; stroke: #fff; stroke-width: 1; }
+
+/* painter */
+.pf1hex-painter .window-content { display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; }
+.pf1hex-painter .pf1hex-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem; }
+.pf1hex-painter .pf1hex-tools button { font-size: 0.75rem; padding: 0.2rem; white-space: nowrap; }
+.pf1hex-painter .pf1hex-tools button.active { outline: 2px solid var(--color-warm-2, #ff6400); }
+.pf1hex-painter .pf1hex-panel { display: flex; flex-direction: column; gap: 0.35rem; }
+.pf1hex-painter label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
+.pf1hex-painter label.pf1hex-check { flex-direction: row; align-items: center; }
+.pf1hex-painter textarea { font-family: monospace; font-size: 0.75rem; }
+.pf1hex-painter fieldset { display: flex; flex-direction: column; gap: 0.35rem; }
+.pf1hex-painter .buttons { display: flex; gap: 0.25rem; }
+.pf1hex-painter .hint { font-size: 0.75rem; opacity: 0.75; margin: 0; }
+.pf1hex-painter .pf1hex-list { list-style: none; margin: 0; padding: 0; }
+.pf1hex-painter .pf1hex-list li { display: flex; align-items: center; gap: 0.3rem; padding: 0.1rem 0; }
+.pf1hex-painter .pf1hex-list li button { flex: 0 0 auto; width: auto; padding: 0 0.3rem; line-height: 1.4; }
+.pf1hex-painter .swatch { display: inline-block; width: 0.8rem; height: 0.8rem; border: 1px solid #000; }

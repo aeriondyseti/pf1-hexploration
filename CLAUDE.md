@@ -91,7 +91,8 @@ finding you deliberately *don't* fix** (below threshold, or deferred as out-of-s
 1. **Hidden truth never reaches players.** GM-only state (true hex terrain after drift, misdirection, unrevealed
    tags and routes, unshared lore) is never stored anywhere a player client can read, nor sent in any
    player-visible message or UI. Scene and actor flags are readable by every client, so this decides where data
-   lives.
+   lives. *(Narrowed in practice to "never rendered, never sent": a client-only module has no player-unreadable
+   storage. See DESIGN §6 and ADR-0002.)*
 2. **The GM is the only writer.** Player clients only send requests (claim a role, plot a path, share lore). The
    active GM's client validates every request and performs every world-state write.
 3. **The rules engine is pure and seeded.** Engine code has no Foundry or pf1 globals and takes an injected

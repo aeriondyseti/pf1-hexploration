@@ -76,12 +76,14 @@ export interface SupplyItem {
   item: any; // pf1 Item in the caravan actor's inventory
   track: SupplyTrack;
   unitsPerQuantity: number; // flag; default 1 person-day per quantity
+  /** The pf1 container holding the item, or null for a loose item. Drain uses loose items first. */
+  container: any | null;
 }
 
 export interface StoreApi {
   /** Register world settings (call in init). */
   registerSettings(): void;
-  /** The pf1 actor the GM designated as the caravan (world setting `caravanActor`). Its inventory is the hold; its token is the map marker. */
+  /** The caravan: the designated `pf1-hexploration.caravan` actor (world setting `caravanActor`), else the world's first actor of that type. Its inventory is the hold; its token is the map marker. */
   getCaravanActor(): any | null;
   setCaravanActor(uuid: string | null): Promise<void>;
   getCaravan(): CaravanState; // defaults when unset
@@ -96,7 +98,10 @@ export interface StoreApi {
   setKnowledge(sceneId: string, keys: HexKey[], state: KnowledgeState): Promise<void>; // GM only
   /** Map filtered to what the party knows: explored/mapped hexes, known routes/landmarks. Use for every player-facing render. */
   partyView(sceneId?: string): MapData;
+  /** Loose supply items first, then items inside containers (a container flagged as a supply makes all its contents count). */
   supplyItems(): SupplyItem[];
+  /** GM: set a supply item's quantity (whole numbers only: pf1 zeroes non-integers), loose or inside a container. Returns the ledger change. */
+  setSupplyQuantity(supply: SupplyItem, quantity: number): Promise<Change>;
   supplyTotals(): { rations: number; water: number };
   /** Subscribe to any change in caravan, map, knowledge or supplies. Returns an unsubscribe fn. */
   onChange(cb: () => void): () => void;

@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Verify tag matches versions
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          MODULE_VERSION=$(jq -r .version static/module.json)
+          PACKAGE_VERSION=$(jq -r .version package.json)
+          if [ "$VERSION" != "$MODULE_VERSION" ] || [ "$VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Tag $TAG does not match static/module.json ($MODULE_VERSION) and package.json ($PACKAGE_VERSION)"
+            exit 1
+          fi
+
+      - run: npm run build
+
+      - name: Package module
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          DOWNLOAD="https://github.com/aeriondyseti/pf1-hexploration/releases/download/$TAG/module.zip"
+          jq --arg url "$DOWNLOAD" '.download = $url' dist/module.json > dist/module.json.tmp
+          mv dist/module.json.tmp dist/module.json
+          # Zip the contents of dist/ so module.json sits at the archive root.
+          (cd dist && zip -r ../module.zip .)
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            module.zip
+            dist/module.json

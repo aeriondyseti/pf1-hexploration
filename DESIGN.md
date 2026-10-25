@@ -117,6 +117,9 @@ time advances one day, a ledger entry is written → on arrival, drift (later mi
 - **Rations and Water are summed from hold items** flagged `supply: rations | water` (Jade Regent cargo-unit
   style). Buying, looting, trading and losing supplies are ordinary item operations; drain decrements item
   quantities. Track unit = one person-day.
+- **Containers hold bulk stock** (ADR-0005): flag a pf1 container (a ration crate) and everything inside it counts
+  toward that track. Drain uses loose supplies first, then container contents; quantities are always whole numbers
+  (pf1 zeroes non-integer quantities).
 - **Drain scales by eaters.** Each roster member eats and drinks by **PF1e gear-weight size multipliers**,
   the same for food and water: Tiny or smaller ×1/10, Small ×½, Medium ×1, Large ×2, Huge ×5,
   Gargantuan ×8, Colossal ×12 (CRB *Armor for Unusual Creatures*). Constructs and undead default to 0. Per-actor
@@ -187,8 +190,14 @@ These came up in the interview but were not settled. The build uses these until 
 
 ## 6. Accepted residuals
 
-<!-- None yet. Sprint 0.3 must establish whether invariant 1 is fully achievable in a client-only Foundry module;
-     if no player-unreadable storage exists, the gap is recorded here with the narrowed guarantee. -->
+- **Invariant 1 is narrowed to "never rendered, never sent" ([ADR-0002](./DECISIONS.md)).** A client-only Foundry
+  module has no player-unreadable world storage: world settings, scenes, actors and journal entries all reach
+  every client. GM truth (the scene's `map` flag: secret tags, unknown routes with their effects and prompts,
+  unknown landmarks, region tables and tuning) and the caravan/ledger flags on the caravan actor (leg plans, GM
+  prompt texts, caravan snapshots) are therefore readable by a player who opens the browser console. The module
+  guarantees that GM truth is **never rendered** in a player's UI or canvas (every player-facing render uses
+  `store.partyView()` or a GM-only branch) and **never sent** in a player-visible chat message or whisper. Real
+  secrecy would need a server-side component, which is out of scope.
 
 ## Appendix — decision log
 

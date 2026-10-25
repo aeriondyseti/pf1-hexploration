@@ -2,6 +2,8 @@
 // plain values — never Foundry objects (invariant 3).
 
 export const MODULE_ID = "pf1-hexploration";
+/** The Caravan actor subtype (DESIGN §4.6). */
+export const CARAVAN_TYPE = `${MODULE_ID}.caravan`;
 
 /** Foundry v13 offset coordinates of a hex, as `${i},${j}` (i = row, j = column). */
 export type HexKey = string;
@@ -229,7 +231,8 @@ export interface Pack {
 // ---------- Ledger (invariant 4) ----------
 
 export type Change =
-  | { kind: "itemQuantity"; itemUuid: string; before: number; after: number }
+  /** containerUuid/itemId are set when the item sits inside a pf1 container (no resolvable UUID of its own). */
+  | { kind: "itemQuantity"; itemUuid: string; before: number; after: number; containerUuid?: string; itemId?: string }
   | { kind: "condition"; actorUuid: string; condition: string; before: boolean; after: boolean }
   | { kind: "knowledge"; sceneId: string; key: HexKey; before: KnowledgeState; after: KnowledgeState }
   | { kind: "caravan"; before: CaravanState; after: CaravanState }

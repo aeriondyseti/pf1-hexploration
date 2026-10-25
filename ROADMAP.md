@@ -10,80 +10,6 @@ Status: next · later. Each `§` cites the relevant [DESIGN.md](./DESIGN.md) sec
 
 ---
 
-## Milestone 0 — Scaffold
-
-- **0.1 Module skeleton, build and release** *(§4.1, §4.11)* — TypeScript + Vite project bundling to `dist/`;
-  `module.json` (id `pf1-hexploration`, Foundry compatibility minimum/verified 13, required system `pf1` ≥ 11.11);
-  Vitest; `tsc --noEmit` typecheck; GitHub Actions CI (typecheck, test, build) and a tag-triggered release workflow
-  that attaches `module.json` and `module.zip` with correct `manifest`/`download` URLs. *(next)*
-  **Done-when:** `npm run build` writes a loadable `dist/` containing `module.json`; `npm test` and `npm run
-  typecheck` pass; CI is green on `main`; pushing tag `v0.0.1` produces a GitHub Release whose `module.json`
-  manifest and download URLs resolve.
-
-- **0.2 Test harness: Foundry and pf1 fakes, seeded roller** *(§3, invariant 3)* — a fake `game`/settings/
-  sockets/documents layer and pf1 roll/condition fakes for integration tests; the `Roller` interface the engine
-  takes, with a seeded implementation for tests and a Foundry `Roll` implementation for play. *(later)*
-  **Done-when:** an integration test drives an adapter end to end against the fakes; the same seed gives the same
-  rolls across runs; a lint/test rule fails if anything under `src/engine/` imports Foundry or pf1 globals.
-
-- **0.3 GM authority channel and hidden-state store** *(§3, invariants 1–2)* — a socket request/response channel
-  where players send typed requests and only the active GM validates and writes; a store that separates
-  party-visible state from GM-only truth. First establish, with evidence, which Foundry v13 storage player clients
-  cannot read. *(later)*
-  **Done-when:** integration tests show a player request is applied only by the GM client and a malformed or
-  unauthorised request is rejected; GM-only fields never appear in party-visible documents or messages; the
-  storage choice and any residual (if no player-unreadable storage exists) are recorded as an ADR and, if needed,
-  in DESIGN §6.
-
-- **0.4 Ledger and undo** *(invariant 4)* — engine-produced diffs recorded as ledger entries in the store; GM
-  undo of the most recent entry restores tracks, conditions, map state, token position and world time. *(later)*
-  **Done-when:** tests apply a multi-part change and undo it back to an identical prior state; undo is GM-only;
-  entries survive a reload.
-
-## Milestone 1 — One full leg, end to end
-
-- **1.1 Hex data model and painter** *(§4.2)* — per-hex records (terrain, difficulty, region, built-in Ultimate
-  Campaign tags, custom tags); a module-rendered terrain layer on the scene's hex grid; a GM brush toolbar.
-  *(later)*
-  **Done-when:** on a blank hex-grid scene with no background image, the GM paints terrain, difficulty, region and
-  tags; the layer renders them; they persist across reload; players see Unknown hexes as blank.
-
-- **1.2 Landmarks and named routes** *(§4.2, §4.9)* — place landmarks on hexes; draw routes as hex chains with
-  days, difficulty, encounter bonus, bargain text, the structured effect menu and GM prompts; plot and approve
-  off-route paths. *(later)*
-  **Done-when:** the GM creates a landmark and a three-hex route with an effect and a prompt; a player plots an
-  off-route path that the GM approves; route and path data validate in tests; the leg DC follows route difficulty
-  (off-route: hardest hex).
-
-- **1.3 Caravan actor** *(§4.6, §4.7)* — the `pf1-hexploration.caravan` actor subtype: roster (eats/drinks by
-  size and creature type, with overrides), cargo hold with supply flags, computed Rations/Water tracks, Wagon
-  Condition track, required draft count; a Caravan sheet. *(later)*
-  **Done-when:** adding a Medium PC, a Large camel and a construct gives daily drain 1 + 2 + 0; dragging supply
-  items into the hold changes the tracks; the sheet shows roster, hold and tracks.
-
-- **1.4 Roles engine** *(§4.4)* — data-driven role records with the effect menu; the seven default roles; doubling
-  penalty on both rolls; Forager DC from mouths; region/terrain DC modifiers; pure leg resolution. *(later)*
-  **Done-when:** unit tests cover success and failure of all seven roles, doubling, a vacant role, the Forager DC
-  formula (7 eaters → 22) and region modifiers; resolution is deterministic for a seed.
-
-- **1.5 Muster window and roll cards** *(§4.3, §4.5)* — an ApplicationV2 window for every user with a map of the
-  routes that user knows; role claiming through the authority channel; GM plan approval; chat-card roll prompts
-  that roll pf1 skills from each actor. *(later)*
-  **Done-when:** two players claim roles, the GM approves, each player rolls from a chat card and the results reach
-  the engine; a player never sees a route they do not know; a conflicting claim becomes a GM request.
-
-- **1.6 Day stepping** *(§4.5, §4.8)* — GM Next Day: advance the caravan token one hex, drain per eater, forced-march
-  save prompts, pf1 conditions, the encounter check against the region's RollTable, one day of world time, a ledger
-  entry. *(later)*
-  **Done-when:** a three-day leg stepped day by day drains the expected totals, prompts saves on a failed Healer,
-  applies Fatigued on a failed save, whispers an encounter result to the GM, advances world time three days, and
-  undoes cleanly one day at a time.
-
-- **1.7 KtP world pack (test data)** *(§4.12)* — an importable pack with the seven roles at KtP's current DCs, the
-  Stormlands region (+5 DCs), the eight bargain routes and the Solaar landmarks, kept outside this repo. *(later)*
-  **Done-when:** importing the pack into a fresh world and running the Borrowed Oasis leg (3 days, Easy) reproduces
-  KtP's expected drain and DCs; the module repo contains no KtP campaign content.
-
 ## Milestone 2 — Knowledge
 
 - **2.1 Explored and Mapped states** *(§4.3)* — Cartographer results set hex states; routes through Mapped hexes
@@ -129,10 +55,15 @@ Status: next · later. Each `§` cites the relevant [DESIGN.md](./DESIGN.md) sec
 Committed and nobody is doing them: the owner's own acts, and live checks of what is built. Not the loop's work
 unless an agent can do one.
 
-- **Choose a license** for the public repo (Foundry modules are commonly MIT). *(owner)*
-- **Confirm the provisional defaults** in DESIGN §4.13 (storm DCs, claim conflicts, at-zero severity, forced-march
-  save). *(owner)*
-- **Live check on Forge after 0.1:** install from the v0.0.1 manifest URL in a v13 + pf1 world; the module enables
-  without console errors. *(owner)*
-- **Live check on Forge after Milestone 1:** run one KtP leg in a real world with at least one player client.
-  *(owner)*
+- **Live check on Forge, v0.1.0** (owner): install from the manifest URL in the duplicate campaign world on the
+  "Solaar Desert: Stormlands" scene (Hexagonal Rows, Odd); create a Caravan, import the KtP pack, run the Borrowed
+  Oasis leg with one player client (claim, roll, resolve, Next Day ×3, Undo); report console errors. Things only a
+  live world can confirm: the caravan subtype holding pf1 items and containers on pf1's base actor class; the socket
+  passing the sender's user id (ADR-0002 note in DESIGN §6); the hex layer tinting tokens from `canvas.interface`;
+  brush strokes also starting Foundry's selection rectangle.
+- **Local Foundry v13 test install** (owner provides the licence key and a timed Node.js download link): pf1 11.11,
+  a hex-row test world, and a Playwright harness that runs a leg as GM and player and fails on console errors.
+- **Confirm ADR-0002** (owner): invariant 1 narrowed to "never rendered, never sent".
+- **Confirm the provisional defaults** in DESIGN §4.13 and ADR-0003 (draft shortfall +1 day per missing animal;
+  wholly Mapped legs auto-succeed every role). *(owner)*
+- **Merge the `sprint/mvp` PR** into `main` (v0.1.0 was released from the branch). *(owner)*

@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-25
+
+### Added
+- Hex map authoring on a scene's hex grid with no background image needed: a GM painter for terrain, difficulty,
+  regions (encounter table, DC modifiers, water multiplier, storm threshold), Ultimate Campaign and custom tags,
+  landmarks, named routes with bargains, effects and GM prompts, plotted off-route paths and party knowledge.
+- A hex layer drawn by the module: GMs see the whole map, players only what the party knows.
+- The Caravan actor type (`pf1-hexploration.caravan`) with its own sheet: drop items and containers to load the
+  hold (ADR-0005).
+- The Caravan window: roster with food and water by size (constructs and undead eat nothing), draft animals, the
+  hold's Rations and Water from flagged supply items or flagged crates, wagon condition, pack import and export.
+- The Travel window with a mini-map: start a leg from a route or plotted path, claim caravan roles, roll pf1 skills
+  from each character, resolve the muster, then step the leg day by day (drain, forced-march saves, Fatigued and
+  Exhausted, encounter checks against the region's table, token movement, world time), arrive, and undo.
+- The seven KtP caravan roles as data-driven defaults, with the Forager DC scaling by mouths and a doubling penalty
+  on both rolls.
+- GM-only writes through a request channel, and an undo ledger for every automated change (ADR-0002, ADR-0003).
+- CI and a tag-triggered GitHub release that Foundry and The Forge install from the manifest URL.
+
 <!--
 Each sprint adds its section here, on its own branch, before it merges (newest first):
 
