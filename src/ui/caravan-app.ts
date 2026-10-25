@@ -69,7 +69,10 @@ function renderCaravan(app: any): string {
   const gm = !!game.user?.isGM;
   const caravan = store.getCaravan();
   const actor = store.getCaravanActor();
-  const actors: any[] = (game.actors?.contents ?? []).filter((a: any) => a.type === CARAVAN_TYPE);
+  const allActors: any[] = game.actors?.contents ?? [];
+  // Caravans for the caravan picker; everyone else (PCs, NPCs, animals) can join the roster.
+  const actors = allActors.filter((a: any) => a.type === CARAVAN_TYPE);
+  const members = allActors.filter((a: any) => a.type !== CARAVAN_TYPE);
   const inRoster = new Set(caravan.roster.map((m) => m.actorUuid));
 
   const actorSection = gm
@@ -97,7 +100,7 @@ function renderCaravan(app: any): string {
   <td><button type="button" data-action="removeMember" data-index="${idx}" title="Remove"><i class="fa-solid fa-trash"></i></button></td>
 </tr>`;
   });
-  const addable = actors.filter((a) => !inRoster.has(a.uuid) && a.uuid !== actor?.uuid);
+  const addable = members.filter((a) => !inRoster.has(a.uuid));
   const rosterFooter = gm
     ? `<div class="pf1hex-row">
   <select name="addActor">${addable.map((a) => option(a.uuid, a.name)).join("")}</select>
