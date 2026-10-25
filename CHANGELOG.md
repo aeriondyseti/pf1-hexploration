@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-25
+
+### Added
+- A GM "Place on map" button in the Caravan window puts the caravan's token on the viewed scene (at its recorded
+  hex, or the view centre) and reports any error.
+
+### Changed
+- New caravans get a linked prototype token with no resource bars and the name shown on hover.
+
 ## [0.1.3] - 2026-10-25
 
 ### Fixed

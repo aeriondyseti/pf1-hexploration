@@ -1,5 +1,5 @@
 // The Caravan window: roster, hold, wagon and pack import/export. Everyone views; the GM edits.
-import { MODULE_ID, CARAVAN_TYPE, type CaravanState, type Pack, type RosterMember, type SupplyTrack } from "../types";
+import { MODULE_ID, CARAVAN_TOKEN, CARAVAN_TYPE, type CaravanState, type Pack, type RosterMember, type SupplyTrack } from "../types";
 import { store } from "../store";
 import { ledger } from "../ledger";
 import { pf1Adapter } from "../pf1";
@@ -27,6 +27,7 @@ export function caravanAppClass(): any {
       actions: {
         setActor: onSetActor,
         createCaravan: onCreateCaravan,
+        placeToken: onPlaceToken,
         openSheet: () => store.getCaravanActor()?.sheet?.render(true),
         addMember: onAddMember,
         removeMember: onRemoveMember,
@@ -89,7 +90,8 @@ function renderCaravan(app: any): string {
   <select name="caravanActor">${[option("", "— none —"), ...actors.map((a) => option(a.uuid, a.name, a.uuid === actor?.uuid))].join("")}</select>
   <button type="button" data-action="setActor">Set</button>
   <button type="button" data-action="createCaravan"><i class="fa-solid fa-plus"></i> New caravan</button>
-  ${actor ? `<button type="button" data-action="openSheet"><i class="fa-solid fa-id-card"></i> Sheet</button>` : ""}
+  ${actor ? `<button type="button" data-action="openSheet"><i class="fa-solid fa-id-card"></i> Sheet</button>
+  <button type="button" data-action="placeToken"><i class="fa-solid fa-location-dot"></i> Place on map</button>` : ""}
 </section>`
     : `<h2>${actor ? esc(actor.name) : "No caravan set"}</h2>`;
 
@@ -207,6 +209,31 @@ function onSetActor(this: any) {
   return attempt(async () => {
     const uuid = field<HTMLSelectElement>(this, "select[name=caravanActor]")?.value || null;
     await store.setCaravanActor(uuid);
+  });
+}
+
+/** GM: put the caravan's token on the viewed scene — at its recorded hex if it has one here, else the view centre. */
+function onPlaceToken(this: any) {
+  return attempt(async () => {
+    if (!game.user?.isGM) return;
+    const actor = store.getCaravanActor();
+    if (!actor) return toast("Set or create a caravan first.", "warn");
+    const scene = canvas?.scene;
+    if (!scene) return toast("View a scene first.", "warn");
+    const existing = scene.tokens?.find((t: any) => t.actorId === actor.id);
+    if (existing) {
+      await canvas.animatePan?.({ x: existing.x, y: existing.y });
+      return toast("The caravan is already on this scene.");
+    }
+    const caravan = store.getCaravan();
+    const [i, j] = (caravan.sceneId === scene.id && caravan.position ? caravan.position : "").split(",").map(Number);
+    const center = Number.isFinite(i) && Number.isFinite(j)
+      ? canvas.grid.getCenterPoint({ i, j })
+      : { x: canvas.stage.pivot.x, y: canvas.stage.pivot.y };
+    const size = canvas.grid.size;
+    const token = await actor.getTokenDocument({ ...CARAVAN_TOKEN, x: center.x - size / 2, y: center.y - size / 2 });
+    await scene.createEmbeddedDocuments("Token", [token.toObject()]);
+    toast("Caravan placed on the map.");
   });
 }
 
