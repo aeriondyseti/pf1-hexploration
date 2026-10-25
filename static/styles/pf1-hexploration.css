@@ -70,3 +70,9 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .pf1hex-tooltip strong { display: block; margin-bottom: 2px; }
+
+/* view panel */
+.pf1hex-view { display: flex; flex-direction: column; gap: 0.25rem; }
+.pf1hex-view .pf1hex-check { display: flex; align-items: center; gap: 0.4rem; }
+.pf1hex-view .buttons { margin-top: 0.4rem; }
+.pf1hex-view .hint { margin: 0.25rem 0 0; font-size: 0.85em; opacity: 0.75; }

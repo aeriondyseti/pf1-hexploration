@@ -16,6 +16,7 @@ import {
   starPoints,
 } from "./helpers";
 import { draft } from "./state";
+import { getView, type ViewOptions } from "./view";
 import { terrainFill } from "./terrain";
 
 let container: any = null;
@@ -72,35 +73,39 @@ export function drawLayer(): void {
 
   const map: MapData = gm ? draft.working ?? store.getMap() : store.partyView();
   const size = canvas.grid.size;
+  const view = getView(); // per-user switches from the Hex View panel
 
-  drawHexes(root, map, size);
-  drawRoutes(root, map, size);
-  drawLeg(root, map, size);
-  if (gm) drawDrafts(root, size);
-  drawLandmarks(root, map, size);
+  drawHexes(root, map, size, view);
+  if (view.routes || view.routeNames) drawRoutes(root, map, size, view, gm);
+  if (view.leg) drawLeg(root, map, size);
+  if (gm) drawDrafts(root, size); // painter previews always show
+  if (view.landmarks || view.landmarkNames) drawLandmarks(root, map, size, view);
 }
 
-function drawHexes(root: any, map: MapData, size: number): void {
+function drawHexes(root: any, map: MapData, size: number, view: ViewOptions): void {
   const fills = new PIXI.Graphics();
   const outlines = new PIXI.Graphics();
   const labels = new PIXI.Container();
   root.addChild(fills, outlines, labels);
 
-  drawBorders(outlines, map, size);
+  if (view.borders) drawBorders(outlines, map, size);
 
   for (const hex of Object.values(map.hexes)) {
-    const poly = vertices(hex.key);
-    fills.beginFill(colorToNumber(terrainFill(hex.terrain)), FILL_ALPHA);
-    fills.drawPolygon(poly);
-    fills.endFill();
+    if (view.terrain) {
+      fills.beginFill(colorToNumber(terrainFill(hex.terrain)), FILL_ALPHA);
+      fills.drawPolygon(vertices(hex.key));
+      fills.endFill();
+    }
 
 
     const c = center(hex.key);
-    const letter = text(DIFFICULTY_LETTER[hex.difficulty] ?? "?", size / 6, 0x333333);
-    letter.position.set(c.x, c.y - size * 0.3);
-    labels.addChild(letter);
+    if (view.difficulty) {
+      const letter = text(DIFFICULTY_LETTER[hex.difficulty] ?? "?", size / 6, 0x333333);
+      letter.position.set(c.x, c.y - size * 0.3);
+      labels.addChild(letter);
+    }
 
-    if (hex.tags.length) {
+    if (view.tags && hex.tags.length) {
       const glyphs = hex.tags.map((t) => TAG_GLYPH[t] ?? "+").join(" ");
       const tags = text(glyphs, size / 8, 0x553311);
       tags.position.set(c.x, c.y - size * 0.12);
@@ -138,16 +143,17 @@ function drawPolyline(g: any, keys: HexKey[]): { x: number; y: number }[] {
   return pts;
 }
 
-function drawRoutes(root: any, map: MapData, size: number): void {
+function drawRoutes(root: any, map: MapData, size: number, view: ViewOptions, gm: boolean): void {
   const g = new PIXI.Graphics();
   root.addChild(g);
   for (const route of Object.values(map.routes)) {
-    // Hidden routes only reach the GM's map (players draw partyView); show them faint.
+    // Hidden routes only reach the GM's map (players draw partyView); show them faint, or not at all.
+    if (gm && !route.knownToParty && !view.hiddenRoutes) continue;
     const alpha = route.knownToParty ? 0.85 : 0.3;
-    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, alpha);
+    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, view.routes ? alpha : 0);
     const pts = drawPolyline(g, [route.from, ...route.hexes]);
     const name = route.name?.trim();
-    if (!name) continue;
+    if (!name || !view.routeNames) continue;
     const mid = polylineMidpoint(pts);
     const label = text(name, size / 5, 0x5a2a08);
     label.alpha = route.knownToParty ? 1 : 0.45;
@@ -191,15 +197,18 @@ function drawDrafts(root: any, size: number): void {
   }
 }
 
-function drawLandmarks(root: any, map: MapData, size: number): void {
+function drawLandmarks(root: any, map: MapData, size: number, view: ViewOptions): void {
   const g = new PIXI.Graphics();
   root.addChild(g);
   for (const lm of Object.values(map.landmarks)) {
     const c = center(lm.hex);
-    g.lineStyle(1, 0x000000, 0.9);
-    g.beginFill(lm.knownToParty ? 0xffd700 : 0xb0b0b0, 1);
-    g.drawPolygon(starPoints(c.x, c.y, size / 6, size / 14));
-    g.endFill();
+    if (view.landmarks) {
+      g.lineStyle(1, 0x000000, 0.9);
+      g.beginFill(lm.knownToParty ? 0xffd700 : 0xb0b0b0, 1);
+      g.drawPolygon(starPoints(c.x, c.y, size / 6, size / 14));
+      g.endFill();
+    }
+    if (!view.landmarkNames) continue;
     const label = text(lm.name, size / 5, 0x000000);
     label.position.set(c.x, c.y + size * 0.25);
     root.addChild(label);

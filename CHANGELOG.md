@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-25
+
+### Added
+- A Hex View panel (eye button in the token controls, hex scenes only) with per-user switches for terrain fill,
+  borders, difficulty letters, tag glyphs, routes, route names, landmarks, landmark names, the current leg's path and
+  hover tooltips, plus hidden routes for the GM. Each user's choices are saved in their browser. Also available as
+  `hx.canvas.getView()` / `setView(patch)` / `openViewPanel()`.
+
 ## [0.1.10] - 2026-10-25
 
 ### Added

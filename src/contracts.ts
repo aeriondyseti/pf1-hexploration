@@ -210,6 +210,12 @@ export interface CanvasApi {
   redraw(): void;
   /** The off-route path most recently plotted with the painter's Path tool on this client (GM), or null. */
   getPlottedPath(): { from: HexKey; path: HexKey[] } | null;
+  /** This user's view switches (what the hex layer draws). */
+  getView(): import("./canvas/view").ViewOptions;
+  /** Change some view switches for this user; the layer redraws. */
+  setView(patch: Partial<import("./canvas/view").ViewOptions>): Promise<import("./canvas/view").ViewOptions>;
+  /** Open the Hex View panel. */
+  openViewPanel(): void;
 }
 
 export interface UiApi {
