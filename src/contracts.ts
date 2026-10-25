@@ -13,6 +13,7 @@ import type {
   LegOutcome,
   LegPlan,
   MapData,
+  Pack,
   PartyMap,
   Region,
   Request,
@@ -101,6 +102,10 @@ export interface StoreApi {
   onChange(cb: () => void): () => void;
   /** Emit a change notification (called by writers after a write). */
   notify(): void;
+  /** GM: load a pack's roles/settings into the world and its map into the scene (replacing the scene's map). */
+  importPack(pack: Pack, sceneId?: string): Promise<void>;
+  /** Current roles/settings and the scene's map as a pack. */
+  exportPack(name: string, sceneId?: string): Pack;
 }
 
 // ---------- Authority (src/authority/, invariant 2) ----------
@@ -174,6 +179,8 @@ export interface CanvasApi {
   register(): void;
   openPainter(): void;
   redraw(): void;
+  /** The off-route path most recently plotted with the painter's Path tool on this client (GM), or null. */
+  getPlottedPath(): { from: HexKey; path: HexKey[] } | null;
 }
 
 export interface UiApi {

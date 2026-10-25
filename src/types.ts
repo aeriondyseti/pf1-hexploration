@@ -216,6 +216,16 @@ export interface CaravanSettings {
   forcedMarchStep: number; // +2 per consecutive day
 }
 
+/** Importable content pack (campaign data lives outside the module repo, DESIGN §4.12). */
+export interface Pack {
+  format: "pf1-hexploration-pack";
+  version: 1;
+  name: string;
+  roles?: RoleDef[];
+  settings?: Partial<CaravanSettings>;
+  map?: MapData;
+}
+
 // ---------- Ledger (invariant 4) ----------
 
 export type Change =
