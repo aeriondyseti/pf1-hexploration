@@ -78,3 +78,16 @@ supersede rather than rewrite. Small/local choices don't need an entry.
 - **Consequences:** Every quantity written is a whole number. Exact fractional consumption (Small members) is
   deferred (TD-0004). Holding pf1 items on the base actor class needs the live check.
 
+## ADR-0006 — Hex defaults are stamped on creation; region-less hexes follow map rules
+- **Date:** 2026-10-25   **Sprint:** fix/roster-npc (v0.1.9)   **Status:** Accepted
+- **Context:** The owner wants hexes created in a region to start from that region's rules, hexes outside any region
+  to start from configurable map rules, and the GM to override either.
+- **Decision:** Defaults are **copied into a hex when it is created** (the owner's choice over live inheritance):
+  the region brush stamps the region's defaults, other brushes the map's, falling back to the current terrain brush.
+  Changing defaults later does not touch existing hexes, except an explicit "Re-stamp region-less hexes". Travel
+  rules for region-less hexes live in `MapData.rules`; `engine.effectiveMap` presents them as a synthetic region
+  (`MAP_REGION_ID`) so the engine and controller treat them like any region. A region id with no region record is
+  kept as is (no rules), matching the earlier behaviour.
+- **Consequences:** Hex records stay self-contained (no inheritance lookups at draw time). Editing a region's
+  defaults does not repaint its hexes; re-stamping regions is a possible follow-up.
+

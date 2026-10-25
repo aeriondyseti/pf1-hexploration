@@ -142,10 +142,15 @@ function drawRoutes(root: any, map: MapData, size: number): void {
   const g = new PIXI.Graphics();
   root.addChild(g);
   for (const route of Object.values(map.routes)) {
-    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, 0.85);
+    // Hidden routes only reach the GM's map (players draw partyView); show them faint.
+    const alpha = route.knownToParty ? 0.85 : 0.3;
+    g.lineStyle(Math.max(2, size / 16), 0x7a3b10, alpha);
     const pts = drawPolyline(g, [route.from, ...route.hexes]);
+    const name = route.name?.trim();
+    if (!name) continue;
     const mid = polylineMidpoint(pts);
-    const label = text(route.name, size / 5, 0x5a2a08);
+    const label = text(name, size / 5, 0x5a2a08);
+    label.alpha = route.knownToParty ? 1 : 0.45;
     label.position.set(mid.x, mid.y - size * 0.12);
     root.addChild(label);
   }

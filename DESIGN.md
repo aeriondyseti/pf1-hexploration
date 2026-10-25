@@ -77,6 +77,10 @@ time advances one day, a ledger entry is written → on arrival, drift (later mi
   custom tags alongside.
 - The GM authors with a **brush toolbar** on the scene's hex grid; the module renders terrain and landmarks
   itself.
+- **Defaults are stamped on creation** (ADR-0006): a region's defaults (terrain, difficulty, tags, encounter mod)
+  apply to hexes painted into it, else the map's defaults for region-less hexes. Hexes outside any region follow the
+  map's own travel rules (DC mods, encounter table, water, storm threshold). The GM can re-stamp all region-less
+  hexes from the map defaults on request.
 
 ### 4.3 Knowledge and visibility
 - Each hex is **Unknown / Explored / Mapped** for the party. The Cartographer result sets Explored or Mapped;

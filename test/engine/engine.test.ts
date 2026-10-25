@@ -390,7 +390,7 @@ describe("plans", () => {
   it("planFromPath treats missing hexes as standard", () => {
     const p = engine.planFromPath(map, "0,0", ["0,1", "9,9"]);
     expect(p.difficulty).toBe("standard");
-    expect(p.regionId).toBeNull();
+    expect(p.regionId).toBe("__map__"); // region-less ground: the map's own rules apply
     expect(p.encounterBonus).toBe(2);
   });
 });
@@ -440,5 +440,42 @@ describe("rolling", () => {
 
   it("encounter total = d20 + journey day + bonus", () => {
     expect(engine.encounterTotal({ d20: () => 11 }, 4, 5)).toEqual({ d20: 11, total: 20 });
+  });
+});
+
+describe("map rules for region-less hexes", () => {
+  const map: MapData = {
+    hexes: { "0,1": hex("0,1"), "0,2": { ...hex("0,2", "hard"), encounterMod: 3 }, "0,3": hex("0,3", "standard", "storm") },
+    regions: { storm: region("storm", { dcMods: { "*": 5 } }) },
+    landmarks: {},
+    routes: {},
+    rules: { dcMods: { navigator: 2 }, encounterTable: "RollTable.map", waterMultiplier: 3, stormThreshold: null },
+  };
+
+  it("effectiveMap puts region-less hexes in the map's synthetic region", () => {
+    const eff = engine.effectiveMap(map);
+    expect(eff.hexes["0,1"].region).toBe("__map__");
+    expect(eff.hexes["0,3"].region).toBe("storm");
+    expect(eff.regions.__map__).toMatchObject({ encounterTable: "RollTable.map", dcMods: { navigator: 2 }, waterMultiplier: 3 });
+    expect(map.hexes["0,1"].region).toBeNull(); // the stored map is untouched
+  });
+
+  it("applies the map's DC mods, water multiplier and hex encounter mods on region-less ground", () => {
+    const eff = engine.effectiveMap(map);
+    const p = engine.planFromPath(eff, "0,0", ["0,1", "0,2"]);
+    expect(p.regionId).toBe("__map__");
+    const out = engine.resolveLeg(
+      input({
+        plan: p,
+        roles: [role("navigator")],
+        assignments: [{ roleId: "navigator", actorUuid: "a" }],
+        rolls: [{ roleId: "navigator", actorUuid: "a", total: 30 }], // success: no extra day
+        hexes: eff.hexes,
+        regions: eff.regions,
+      }),
+    );
+    expect(out.roles[0].dc).toBe(18 + 2);
+    expect(out.days.map((d) => d.drain.water)).toEqual([3, 3]); // 1 person-day × 3
+    expect(out.days[1].encounterBonus).toBe(5 + 3); // hard hex bonus + its encounter mod
   });
 });

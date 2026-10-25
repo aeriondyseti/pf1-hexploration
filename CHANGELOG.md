@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-25
+
+### Added
+- Regions can carry defaults for new hexes (terrain, difficulty, tags, encounter mod), stamped onto any hex painted
+  into the region; the GM can still repaint or retag it afterwards (ADR-0006).
+- Each map has defaults for new hexes outside any region and its own travel rules for them: DC modifiers, encounter
+  table, water multiplier and storm threshold. "Re-stamp region-less hexes" resets every hex outside a region to
+  the map defaults on request.
+- A per-hex encounter mod, set with the terrain brush and shown in the hover tooltip.
+
+### Changed
+- Route names are optional; an unnamed route draws no label on the map and is listed as e.g. "3-day easy route".
+- Hidden routes are drawn faint on the GM's map (players never see them).
+
 ## [0.1.8] - 2026-10-25
 
 ### Changed

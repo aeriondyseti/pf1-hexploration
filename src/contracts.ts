@@ -58,6 +58,8 @@ export interface EngineApi {
   doublingPenalty(actorUuid: string, assignments: Assignment[], settings: CaravanSettings): number;
   /** Resolve a mustered leg: role outcomes, total days, the day-by-day plan. Deterministic. */
   resolveLeg(input: ResolveLegInput): LegOutcome;
+  /** The map as the rules see it: hexes outside any region join a synthetic MAP_REGION_ID region built from map.rules. */
+  effectiveMap(map: MapData): MapData;
   /** Leg plan from a named route in the map. */
   planFromRoute(map: MapData, routeId: string): LegPlan;
   /** Leg plan for an off-route path: DC from the hardest hex, region of the hardest hex. */

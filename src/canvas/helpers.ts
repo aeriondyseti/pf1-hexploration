@@ -1,5 +1,6 @@
 // Pure helpers for the canvas layer and painter (no Foundry globals; unit-tested).
-import type { Difficulty, GmPrompt, HexKey, HexRecord, KnowledgeState, MapData, RouteEffect } from "../types";
+import type { Difficulty, GmPrompt, HexDefaults, HexKey, HexRecord, KnowledgeState, MapData, RouteEffect } from "../types";
+import { routeLabel } from "../types";
 
 export const DIFFICULTY_LETTER: Record<Difficulty, string> = { easy: "E", standard: "S", hard: "H", brutal: "B" };
 
@@ -22,29 +23,53 @@ export function parseHexKey(key: HexKey): { i: number; j: number } {
 }
 
 export type BrushOp =
-  | { kind: "terrain"; terrain: string; difficulty: Difficulty }
+  | { kind: "terrain"; terrain: string; difficulty: Difficulty; encounterMod?: number | null } // null/absent: keep
   | { kind: "region"; regionId: string | null }
   | { kind: "tag"; tag: string; add: boolean }
   | { kind: "erase" };
 
-/** Apply a brush to hexes, returning a new map. Region/tag brushes create a hex from `fallback` if none exists. */
-export function applyBrush(
-  map: MapData,
-  keys: HexKey[],
-  op: BrushOp,
-  fallback: { terrain: string; difficulty: Difficulty },
-): MapData {
+/** Where a new hex's starting values come from: a fixed fallback, or a lookup by the region it is created in. */
+export type HexDefaultsSource =
+  | { terrain: string; difficulty: Difficulty; tags?: string[]; encounterMod?: number }
+  | ((regionId: string | null) => HexDefaults);
+
+/**
+ * The defaults stamped onto a hex created in `regionId` (DESIGN §4.2): the region's own defaults, else the map's
+ * defaults for region-less hexes, else `fallback` (the painter's current terrain brush).
+ */
+export function hexDefaultsFor(map: MapData, regionId: string | null, fallback: HexDefaults): HexDefaults {
+  const region = regionId ? map.regions[regionId] : undefined;
+  const d = region?.defaults ?? map.defaults ?? fallback;
+  return { terrain: d.terrain, difficulty: d.difficulty, tags: [...(d.tags ?? [])], encounterMod: d.encounterMod ?? 0 };
+}
+
+/**
+ * Apply a brush to hexes, returning a new map. A brush that lands on an empty hex creates it, stamped with the
+ * defaults of the region it is created in (region brush) or the map's (other brushes). Existing hexes keep their
+ * values except what the brush sets.
+ */
+export function applyBrush(map: MapData, keys: HexKey[], op: BrushOp, defaults: HexDefaultsSource): MapData {
+  const lookup = (regionId: string | null): HexDefaults =>
+    typeof defaults === "function"
+      ? defaults(regionId)
+      : { terrain: defaults.terrain, difficulty: defaults.difficulty, tags: [...(defaults.tags ?? [])], encounterMod: defaults.encounterMod ?? 0 };
   const hexes = { ...map.hexes };
   for (const key of keys) {
     if (op.kind === "erase") {
       delete hexes[key];
       continue;
     }
-    const prev: HexRecord = hexes[key] ?? { key, ...fallback, region: null, tags: [] };
+    let prev = hexes[key];
+    if (!prev) {
+      const regionId = op.kind === "region" ? op.regionId : null;
+      const d = lookup(regionId);
+      prev = { key, terrain: d.terrain, difficulty: d.difficulty, region: null, tags: d.tags, ...(d.encounterMod ? { encounterMod: d.encounterMod } : {}) };
+    }
     const next: HexRecord = { ...prev, tags: [...prev.tags] };
     if (op.kind === "terrain") {
       next.terrain = op.terrain;
       next.difficulty = op.difficulty;
+      if (op.encounterMod !== undefined && op.encounterMod !== null) next.encounterMod = op.encounterMod;
     } else if (op.kind === "region") {
       next.region = op.regionId;
     } else if (op.add) {
@@ -55,6 +80,20 @@ export function applyBrush(
     hexes[key] = next;
   }
   return { ...map, hexes };
+}
+
+/** Re-stamp every hex outside any region with the map's defaults (terrain, difficulty, tags, encounter mod). */
+export function restampUnregioned(map: MapData): { map: MapData; count: number } {
+  if (!map.defaults) return { map, count: 0 };
+  const d = map.defaults;
+  const hexes = { ...map.hexes };
+  let count = 0;
+  for (const [key, hex] of Object.entries(map.hexes)) {
+    if (hex.region && map.regions[hex.region]) continue;
+    hexes[key] = { ...hex, terrain: d.terrain, difficulty: d.difficulty, tags: [...d.tags], encounterMod: d.encounterMod };
+    count++;
+  }
+  return { map: { ...map, hexes }, count };
 }
 
 /**
@@ -235,7 +274,8 @@ export function hexInfo(
     lines.push(text);
   }
   if (hex?.tags.length) lines.push(`Tags: ${hex.tags.join(", ")}`);
-  for (const r of routes) lines.push(`Route: ${r.name} (${r.days} d, ${DIFFICULTY_LABEL[r.difficulty] ?? r.difficulty})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
+  if (hex?.encounterMod) lines.push(`Encounter ${hex.encounterMod > 0 ? "+" : ""}${hex.encounterMod}`);
+  for (const r of routes) lines.push(`Route: ${routeLabel(r)} (${r.days} d, ${DIFFICULTY_LABEL[r.difficulty] ?? r.difficulty})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
   if (opts.gm) lines.push(`Party knows: ${opts.knowledge ?? "unknown"}`);
   return { title, lines };
 }
