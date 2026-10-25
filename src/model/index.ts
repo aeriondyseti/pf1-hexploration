@@ -4,7 +4,8 @@
 import { CARAVAN_TYPE, MODULE_ID } from "../types";
 import { store } from "../store";
 import { hexUi } from "../ui";
-import { esc } from "../ui/html";
+import { dragData, esc, toast } from "../ui/html";
+import { dropActorOnRoster } from "../ui/caravan-app";
 
 export function registerCaravanType(): void {
   const { TypeDataModel } = foundry.abstract;
@@ -55,7 +56,7 @@ ${gm && !active ? `<button type="button" data-action="makeActive">Make active</b
 <button type="button" data-action="openCaravan"><i class="fa-solid fa-route"></i> Open Caravan window</button>
 <h3>Hold</h3>
 <ul class="pf1hex-hold">${items || "<li><em>Empty — drop items here.</em></li>"}</ul>
-<p class="pf1hex-note">Drop pf1 items or containers onto this sheet to load the hold. Flag supplies (or a whole crate) in the Caravan window.</p>
+<p class="pf1hex-note">Drop pf1 items or containers onto this sheet to load the hold, or actors to add them to the roster. Flag supplies (or a whole crate) in the Caravan window.</p>
 </section>`;
     }
 
@@ -72,9 +73,16 @@ ${gm && !active ? `<button type="button" data-action="makeActive">Make active</b
 
     async dropItem(event: DragEvent): Promise<void> {
       event.preventDefault();
-      if (!game.user?.isGM) return; // invariant 2: the hold is GM-written
-      const editor = foundry.applications?.ux?.TextEditor?.implementation ?? (globalThis as any).TextEditor;
-      const data = editor.getDragEventData(event);
+      if (!game.user?.isGM) return; // invariant 2: the hold and roster are GM-written
+      const data = dragData(event);
+      if (data?.type === "Actor") {
+        if (store.getCaravanActor()?.uuid !== this.document.uuid) {
+          toast("Make this the active caravan before adding to its roster.", "warn");
+          return;
+        }
+        await dropActorOnRoster(event);
+        return;
+      }
       if (data?.type !== "Item" || !data.uuid) return;
       const item = await fromUuid(data.uuid);
       if (!item || item.parent?.uuid === this.document.uuid) return;
