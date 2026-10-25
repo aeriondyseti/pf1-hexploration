@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-25
+
+### Changed
+- On scenes without a hexagonal grid (battlemaps, backgrounds) the Hex Painter, Caravan Travel and Caravan buttons
+  are hidden from the token controls, and the "this scene needs a hexagonal grid" notice no longer appears.
+
 ## [0.1.5] - 2026-10-25
 
 ### Fixed

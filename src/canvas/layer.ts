@@ -13,11 +13,10 @@ import {
   polylineMidpoint,
   starPoints,
 } from "./helpers";
-import { draft, notify } from "./state";
+import { draft } from "./state";
 import { terrainFill } from "./terrain";
 
 let container: any = null;
-const warnedScenes = new Set<string>();
 
 const FILL_ALPHA = 0.55;
 const LABEL_FONT = "Signika, sans-serif";
@@ -66,14 +65,8 @@ export function drawLayer(): void {
   for (const child of root.removeChildren()) child.destroy({ children: true });
 
   const gm = !!game.user?.isGM;
-  if (!canvas.grid.isHexagonal) {
-    const sceneId = canvas.scene?.id;
-    if (gm && sceneId && !warnedScenes.has(sceneId)) {
-      warnedScenes.add(sceneId);
-      notify("info", "PF1 Hexploration: this scene needs a hexagonal grid to show the hex map.");
-    }
-    return;
-  }
+  // Battlemaps and other non-hex scenes: draw nothing (the scene controls hide our tools there).
+  if (!canvas.grid.isHexagonal) return;
 
   const map: MapData = gm ? draft.working ?? store.getMap() : store.partyView();
   const knowledge = gm ? store.getPartyMap().knowledge : {};
