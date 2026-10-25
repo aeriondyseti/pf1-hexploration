@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-25
+
+### Added
+- Hovering over a hex on a hex scene shows a small panel with its terrain and difficulty, region, tags, landmarks,
+  routes and whether the caravan is there. GMs also see region tuning and what the party knows; players see only
+  what the party knows. Per-user setting: Hex tooltips (on by default).
+
 ## [0.1.6] - 2026-10-25
 
 ### Changed

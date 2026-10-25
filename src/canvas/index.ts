@@ -4,6 +4,7 @@ import { store } from "../store";
 import { hexUi } from "../ui";
 import { drawLayer, teardownLayer } from "./layer";
 import { closePainter, getPlottedPath, openPainter } from "./painter";
+import { attachTooltip, detachTooltip, registerTooltipSetting } from "./tooltip";
 
 // Shared terrain palette (the UI mini-map uses it too).
 export { TERRAINS, terrainFill } from "./terrain";
@@ -21,12 +22,15 @@ function scheduleRedraw(): void {
 
 export const hexCanvas = {
   register() {
+    registerTooltipSetting();
     Hooks.on("canvasReady", () => {
       drawLayer();
+      attachTooltip();
       // Our tools only make sense on hex scenes; rebuild the controls so they appear/disappear per scene.
       (globalThis as any).ui?.controls?.render?.({ reset: true });
     });
     Hooks.on("canvasTearDown", () => {
+      detachTooltip();
       closePainter();
       teardownLayer();
     });

@@ -208,3 +208,48 @@ export function escapeHtml(value: unknown): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+export interface HexInfo {
+  title: string; // e.g. "Dunes · Hard"
+  lines: string[]; // plain text; the tooltip escapes it
+}
+
+const TERRAIN_LABEL = (terrain: string) => terrain.charAt(0).toUpperCase() + terrain.slice(1);
+const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: "Easy", standard: "Standard", hard: "Hard", brutal: "Brutal" };
+
+/**
+ * What the hover tooltip shows for one hex. `map` must already be the viewer's map: the full map for the GM,
+ * `store.partyView()` for players (invariant 1). `gm` adds GM-only detail (party knowledge, region tuning).
+ * Returns null when there is nothing to show (no record and no landmark/route/caravan on the hex).
+ */
+export function hexInfo(
+  map: MapData,
+  key: HexKey,
+  opts: { gm: boolean; knowledge?: KnowledgeState; caravanHere?: boolean; terrainLabel?: (t: string) => string },
+): HexInfo | null {
+  const hex = map.hexes[key];
+  const landmarks = Object.values(map.landmarks).filter((l) => l.hex === key);
+  const routes = Object.values(map.routes).filter((r) => r.from === key || r.hexes.includes(key));
+  if (!hex && !landmarks.length && !routes.length && !opts.caravanHere) return null;
+
+  const label = opts.terrainLabel ?? TERRAIN_LABEL;
+  const title = hex ? `${label(hex.terrain)} · ${DIFFICULTY_LABEL[hex.difficulty] ?? hex.difficulty}` : "Uncharted";
+  const lines: string[] = [];
+  for (const l of landmarks) lines.push(`★ ${l.name}${opts.gm && !l.knownToParty ? " (hidden)" : ""}`);
+  if (opts.caravanHere) lines.push("The caravan is here");
+  const region = hex?.region ? map.regions[hex.region] : undefined;
+  if (region) {
+    let text = `Region: ${region.name}`;
+    if (opts.gm) {
+      const mods = Object.entries(region.dcMods ?? {}).map(([k, v]) => `${k === "*" ? "all" : k} ${v >= 0 ? "+" : ""}${v}`);
+      if (mods.length) text += ` (DC ${mods.join(", ")})`;
+      if (region.waterMultiplier && region.waterMultiplier !== 1) text += ` · water ×${region.waterMultiplier}`;
+      text += region.encounterTable ? " · encounter table set" : " · no encounter table";
+    }
+    lines.push(text);
+  }
+  if (hex?.tags.length) lines.push(`Tags: ${hex.tags.join(", ")}`);
+  for (const r of routes) lines.push(`Route: ${r.name} (${r.days} d, ${DIFFICULTY_LABEL[r.difficulty] ?? r.difficulty})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
+  if (opts.gm) lines.push(`Party knows: ${opts.knowledge ?? "unknown"}`);
+  return { title, lines };
+}
