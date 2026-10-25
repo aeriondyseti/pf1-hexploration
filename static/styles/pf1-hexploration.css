@@ -70,3 +70,21 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .pf1hex-tooltip strong { display: block; margin-bottom: 2px; }
+
+/* view panel */
+.pf1hex-view { display: flex; flex-direction: column; gap: 0.25rem; }
+.pf1hex-view .pf1hex-check { display: flex; align-items: center; gap: 0.4rem; }
+.pf1hex-view .buttons { margin-top: 0.4rem; }
+.pf1hex-view .hint { margin: 0.25rem 0 0; font-size: 0.85em; opacity: 0.75; }
+
+/* colour + opacity fields */
+.pf1hex-color { display: flex; align-items: center; gap: 0.35rem; }
+.pf1hex-color input[type="range"] { flex: 1; min-width: 4rem; }
+.pf1hex-color .hint { min-width: 2.5rem; text-align: right; }
+
+/* icons */
+.pf1hex .pf1hex-minimap .landmark-icon { stroke: #fff; stroke-width: 0.6; paint-order: stroke; }
+.pf1hex-icon { display: flex; align-items: center; gap: 0.35rem; }
+.pf1hex-icon .pf1hex-icon-preview { width: 1.25em; text-align: center; color: #5a3a1a; }
+.pf1hex-icon input { flex: 1; }
+.pf1hex-tag-icons td:first-child { white-space: nowrap; padding-right: 0.5rem; }

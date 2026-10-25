@@ -91,3 +91,18 @@ supersede rather than rewrite. Small/local choices don't need an entry.
 - **Consequences:** Hex records stay self-contained (no inheritance lookups at draw time). Editing a region's
   defaults does not repaint its hexes; re-stamping regions is a possible follow-up.
 
+## ADR-0007 — hx.caravan: typed results, one ledger entry per call, one code path
+- **Date:** 2026-10-25   **Sprint:** feat/caravan-api (v0.1.10)   **Status:** Accepted
+- **Context:** Sable (the owner's browser agent) drives the module through `eval()`. The raw recipes for placing
+  the caravan and editing the roster could drift (token moved without `caravan.position`, duplicate roster entries),
+  and `travel` refusals only show a toast, which an agent cannot see.
+- **Decision:** A new `hx.caravan` service (`src/caravan/`) owns placement and roster edits. Every write returns
+  `CaravanResult` = `{ ok: true, caravan, ledgerId }` | `{ ok: false, code, error }` with a stable `code`
+  (`gm-only`, `leg-active`, `not-hex-scene`, `off-grid`, `no-caravan-actor`, `unknown-actor`, `caravan-actor`,
+  `duplicate`, `not-member`, `holds-role`, `bad-value`, plus `failed` when Foundry throws), writes one ledger entry,
+  and runs in travel's write queue. The Caravan window and canvas drop call the same functions. New ledger change
+  kinds `tokenCreate` / `tokenDelete` make placement undoable.
+- **Consequences:** `ledgerId` identifies the entry, but undo still only reverts the newest entry: reverting an
+  older one out of order could corrupt later steps (a follow-up could add "undo back to this entry"). `travel`
+  methods still warn instead of returning results; giving them the same `Result` shape is a natural next step.
+

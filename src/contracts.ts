@@ -3,6 +3,7 @@
 // typed `any` (no Foundry type package); domain data uses src/types.ts.
 import type {
   Assignment,
+  CaravanResult,
   CaravanSettings,
   CaravanState,
   Change,
@@ -13,6 +14,8 @@ import type {
   LegOutcome,
   LegPlan,
   MapData,
+  MemberOpts,
+  MemberPatch,
   Pack,
   PartyMap,
   Region,
@@ -179,6 +182,25 @@ export interface TravelApi {
   rollSave(actorUuid: string, day: number): Promise<void>;
 }
 
+// ---------- Caravan service (src/caravan/, exposed as hx.caravan) ----------
+
+/** Placement and roster edits with typed results. The Caravan window uses these same functions. */
+export interface CaravanApi {
+  // Reading (sync, any client)
+  get(): CaravanState;
+  member(actorUuid: string): RosterMember | null;
+  /** Case-insensitive, exact (trimmed) name match. */
+  findMember(name: string): RosterMember | null;
+  // Placement (GM, one ledger entry each). Refused while a leg is mustering or underway.
+  place(hex: HexKey, sceneId?: string): Promise<CaravanResult>;
+  unplace(sceneId?: string): Promise<CaravanResult>;
+  // Roster (GM, one ledger entry each)
+  add(actorUuid: string, opts?: MemberOpts): Promise<CaravanResult>;
+  remove(actorUuid: string): Promise<CaravanResult>;
+  update(actorUuid: string, patch: MemberPatch): Promise<CaravanResult>;
+  setDraftRequired(n: number): Promise<CaravanResult>;
+}
+
 // ---------- Canvas & UI ----------
 
 export interface CanvasApi {
@@ -188,6 +210,12 @@ export interface CanvasApi {
   redraw(): void;
   /** The off-route path most recently plotted with the painter's Path tool on this client (GM), or null. */
   getPlottedPath(): { from: HexKey; path: HexKey[] } | null;
+  /** This user's view switches (what the hex layer draws). */
+  getView(): import("./canvas/view").ViewOptions;
+  /** Change some view switches for this user; the layer redraws. */
+  setView(patch: Partial<import("./canvas/view").ViewOptions>): Promise<import("./canvas/view").ViewOptions>;
+  /** Open the Hex View panel. */
+  openViewPanel(): void;
 }
 
 export interface UiApi {

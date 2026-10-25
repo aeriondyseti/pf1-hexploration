@@ -54,6 +54,12 @@ async function revert(change: Change): Promise<void> {
     case "token":
       await fromUuidSync(change.tokenUuid)?.update(change.before);
       break;
+    case "tokenCreate":
+      await fromUuidSync(change.tokenUuid)?.delete();
+      break;
+    case "tokenDelete":
+      await game.scenes?.get(change.sceneId)?.createEmbeddedDocuments("Token", [change.data]);
+      break;
     case "worldTime":
       await game.time.advance(-change.seconds);
       break;

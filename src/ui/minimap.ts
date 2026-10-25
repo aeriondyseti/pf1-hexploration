@@ -3,6 +3,7 @@
 import type { HexKey, LegPlan, MapData } from "../types";
 import { esc } from "./html";
 import { TERRAINS } from "../canvas";
+import { DEFAULT_LANDMARK_ICON, glyphOr, landmarkIcon, symbolColor } from "../canvas/icons";
 
 export interface GridShape {
   columns: boolean; // column-based (flat-top) hex grid; default row-based (pointy-top)
@@ -122,7 +123,8 @@ export function renderMiniMap(map: MapData, opts: MiniMapOptions): string {
     if (!pts) return "";
     const selected = route.id === opts.selectedRouteId;
     const action = opts.routesClickable ? ` data-action="pickRoute" data-route-id="${esc(route.id)}"` : "";
-    return `<polyline class="route${selected ? " selected" : ""}" points="${pts}"${action}><title>${esc(
+    const stroke = route.color && !selected ? ` style="stroke:${esc(route.color)}"` : "";
+    return `<polyline class="route${selected ? " selected" : ""}" points="${pts}"${stroke}${action}><title>${esc(
       `${route.name} — ${route.days}d, ${route.difficulty}`,
     )}</title></polyline>`;
   });
@@ -132,9 +134,16 @@ export function renderMiniMap(map: MapData, opts: MiniMapOptions): string {
   const landmarks = Object.values(map.landmarks).map((lm) => {
     const c = hexCenter(lm.hex, grid);
     if (!c) return "";
-    return `<circle class="landmark" cx="${c.x.toFixed(2)}" cy="${c.y.toFixed(2)}" r="${R * 0.35}"><title>${esc(
-      lm.name,
-    )}</title></circle>`;
+    const color = symbolColor(map, lm.hex);
+    const glyph = glyphOr(landmarkIcon(lm), DEFAULT_LANDMARK_ICON);
+    if (!glyph) {
+      return `<circle class="landmark" cx="${c.x.toFixed(2)}" cy="${c.y.toFixed(2)}" r="${R * 0.35}" style="fill:${esc(color)}"><title>${esc(
+        lm.name,
+      )}</title></circle>`;
+    }
+    return `<text class="landmark-icon" x="${c.x.toFixed(2)}" y="${c.y.toFixed(2)}" font-size="${(R * 0.9).toFixed(2)}"
+      font-family="${esc(glyph.fontFamily)}" font-weight="${esc(glyph.fontWeight)}" text-anchor="middle" dominant-baseline="central"
+      style="fill:${esc(color)}">${esc(glyph.char)}<title>${esc(lm.name)}</title></text>`;
   });
 
   const posCenter = opts.position ? hexCenter(opts.position, grid) : null;

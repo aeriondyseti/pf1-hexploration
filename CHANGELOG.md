@@ -5,6 +5,56 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-25
+
+### Fixed
+- The hex hover tooltip no longer shows through character sheets or other windows: it appears only while the canvas
+  itself is under the cursor.
+
+## [0.1.13] - 2026-10-25
+
+### Added
+- Landmarks have an optional Font Awesome icon (e.g. `fa-tower-observation`, `fa-water`), with a live preview in the
+  Hex Painter; landmarks without one use `fa-location-dot`.
+- Tag symbols come from one table of Font Awesome icons, which the GM can override per tag (custom tags included)
+  in the Hex Painter's Tags panel.
+
+### Changed
+- Map symbols are Font Awesome glyphs drawn in a single colour: the hex's region border colour, or dark brown outside
+  any region. Hidden landmarks (GM view) are drawn faint. The mini-map uses the same icons and colours.
+- The hover tooltip names landmarks as "Landmark: …" instead of using a star character.
+
+## [0.1.12] - 2026-10-25
+
+### Added
+- Colours accept an alpha channel (`#rrggbbaa` or `#rgba`) everywhere they are drawn. The Hex Painter's region
+  colour, map border colour and the new per-route line colour each have an opacity slider beside the picker.
+- Routes can have their own line colour (default brown); hidden routes stay faint on top of it.
+
+### Fixed
+- An 8-digit colour such as `#7b5ea780` no longer falls back to grey.
+
+## [0.1.11] - 2026-10-25
+
+### Added
+- A Hex View panel (eye button in the token controls, hex scenes only) with per-user switches for terrain fill,
+  borders, difficulty letters, tag glyphs, routes, route names, landmarks, landmark names, the current leg's path and
+  hover tooltips, plus hidden routes for the GM. Each user's choices are saved in their browser. Also available as
+  `hx.canvas.getView()` / `setView(patch)` / `openViewPanel()`.
+
+## [0.1.10] - 2026-10-25
+
+### Added
+- `hx.caravan`, a caravan service for agents and macros: `place` / `unplace` the caravan token (its position follows
+  the token), `add` / `remove` / `update` roster members, `setDraftRequired`, and `get` / `member` / `findMember`.
+  Every write returns `{ ok, caravan, ledgerId }` or `{ ok: false, code, error }` and records one undo entry
+  (ADR-0007).
+
+### Changed
+- The Caravan window, Place on map and dragging the caravan onto the scene all go through `hx.caravan`, so a refused
+  change (a duplicate, removing a role-holder mid-leg, moving the caravan during a leg) gives the same reason everywhere.
+- Undo can now remove a token the caravan placed, and restore one it removed.
+
 ## [0.1.9] - 2026-10-25
 
 ### Added

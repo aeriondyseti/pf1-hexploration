@@ -4,6 +4,8 @@ import { store } from "../store";
 import type { Difficulty, HexDefaults, HexKey, KnowledgeState, Landmark, MapData, MapRules, Region, Route } from "../types";
 import { DIFFICULTIES, ENCOUNTER_BONUS, MODULE_ID, UC_TAGS, routeLabel } from "../types";
 import {
+  joinColor,
+  splitColor,
   applyBrush,
   hexDefaultsFor,
   restampUnregioned,
@@ -18,6 +20,7 @@ import {
   type BrushOp, DEFAULT_BASE_COLOR } from "./helpers";
 import { drawLayer } from "./layer";
 import { draft, notify } from "./state";
+import { DEFAULT_LANDMARK_ICON, DEFAULT_TAG_ICON, TAG_ICONS, landmarkIcon, normalizeIcon, tagIconOverrides } from "./icons";
 import { TERRAINS, TERRAIN_KEYS } from "./terrain";
 
 type Tool = "terrain" | "region" | "tags" | "erase" | "landmark" | "route" | "path" | "knowledge";
@@ -161,6 +164,7 @@ function openLandmark(lm: Landmark | null, hex: HexKey): void {
   f["lm.name"] = lm?.name ?? "";
   f["lm.description"] = lm?.description ?? "";
   f["lm.known"] = lm?.knownToParty ?? false;
+  f["lm.icon"] = lm?.icon ?? "";
   app?.render();
 }
 
@@ -215,6 +219,13 @@ function detachPointer(): void {
 
 // ---------- form saving ----------
 
+const ROUTE_DEFAULT_COLOR = "#7a3b10";
+/** The route form's colour, omitted when it is the default opaque brown. */
+function routeColor(): { color?: string } {
+  const color = colorFromForm("rt.color", ROUTE_DEFAULT_COLOR);
+  return color === ROUTE_DEFAULT_COLOR ? {} : { color };
+}
+
 const tagList = (text: string) => text.split(",").map((t) => t.trim()).filter(Boolean);
 
 /** Read a defaults block (`<prefix>Terrain`, `Difficulty`, `Tags`, `Mod`); no terrain chosen = no defaults. */
@@ -244,7 +255,7 @@ function mapFormFromScene(): void {
   f["md.dcMods"] = formatDcMods(map.rules?.dcMods ?? {});
   f["md.water"] = String(map.rules?.waterMultiplier ?? 1);
   f["md.storm"] = map.rules?.stormThreshold == null ? "" : String(map.rules.stormThreshold);
-  f.mapColor = map.baseColor || DEFAULT_BASE_COLOR;
+  colorIntoForm("mapColor", map.baseColor, DEFAULT_BASE_COLOR);
 }
 
 async function saveMapDefaults(): Promise<void> {
@@ -299,7 +310,7 @@ async function saveRegion(): Promise<void> {
   const region: Region = {
     id: regionEdit || randomId(),
     name,
-    color: str("rg.color") || "#cc3333",
+    color: colorFromForm("rg.color", "#cc3333"),
     encounterTable: str("rg.table").trim() || null,
     dcMods,
     waterMultiplier: Number(str("rg.water")) || 1,
@@ -334,6 +345,12 @@ async function saveLandmark(): Promise<void> {
     description: str("lm.description"),
     knownToParty: !!f["lm.known"],
   };
+  const iconText = str("lm.icon").trim();
+  if (iconText) {
+    const icon = normalizeIcon(iconText);
+    if (!icon) return notify("warn", `"${iconText}" is not a Font Awesome icon name (try fa-tower-observation).`);
+    lm.icon = icon;
+  }
   const map = cloneMap();
   map.landmarks[lm.id] = lm;
   await store.setMap(map);
@@ -349,6 +366,7 @@ function openRouteForm(route: Route | null): void {
   f["rt.difficulty"] = difficulty;
   f["rt.bonus"] = String(route?.encounterBonus ?? ENCOUNTER_BONUS[difficulty]);
   f["rt.bargain"] = route?.bargain ?? "";
+  colorIntoForm("rt.color", route?.color, ROUTE_DEFAULT_COLOR);
   f["rt.known"] = route?.knownToParty ?? false;
   f["rt.effects"] = JSON.stringify(route?.effects ?? [], null, 1);
   f["rt.prompts"] = JSON.stringify(route?.prompts ?? [], null, 1);
@@ -376,6 +394,7 @@ async function saveRoute(): Promise<void> {
     difficulty,
     encounterBonus: bonus === "" || Number.isNaN(Number(bonus)) ? ENCOUNTER_BONUS[difficulty] : Number(bonus),
     bargain: str("rt.bargain"),
+    ...routeColor(),
     effects,
     prompts,
     knownToParty: !!f["rt.known"],
@@ -399,6 +418,59 @@ const textarea = (name: string, label: string, rows = 3) =>
   `<label>${label}<textarea name="${name}" rows="${rows}">${escapeHtml(str(name))}</textarea></label>`;
 const terrainSelect = (name: string, none: string) =>
   `<label>Terrain <select name="${name}">${opt("", none, str(name))}${TERRAIN_KEYS.map((k) => opt(k, TERRAINS[k].label, str(name))).join("")}</select></label>`;
+/** A colour picker plus an opacity slider, stored in the form as `<name>.hex` / `<name>.alpha` (0–100). */
+const colorField = (name: string, label: string) =>
+  `<label class="pf1hex-color">${label} <input type="color" name="${name}.hex" value="${escapeHtml(str(`${name}.hex`) || "#888888")}">
+    <input type="range" name="${name}.alpha" min="0" max="100" step="5" value="${escapeHtml(str(`${name}.alpha`) || "100")}"
+      title="Opacity"><span class="hint">${escapeHtml(str(`${name}.alpha`) || "100")}%</span></label>`;
+/** Load a stored colour into a colour field. */
+function colorIntoForm(name: string, color: string | null | undefined, fallback: string): void {
+  const { hex, alpha } = splitColor(color || fallback, fallback);
+  f[`${name}.hex`] = hex;
+  f[`${name}.alpha`] = String(Math.round(alpha * 100));
+}
+/** Read a colour field back as "#rrggbb" or "#rrggbbaa". */
+const colorFromForm = (name: string, fallback: string) =>
+  joinColor(str(`${name}.hex`) || fallback, str(`${name}.alpha`) === "" ? 1 : Number(str(`${name}.alpha`)) / 100);
+/** An icon-name field with a live preview; blank = `placeholder`. */
+const iconInput = (name: string, label: string, placeholder: string) => {
+  const shown = normalizeIcon(str(name)) ?? placeholder;
+  return `<label class="pf1hex-icon">${label} <i class="fa-solid ${escapeHtml(shown)} pf1hex-icon-preview"></i>
+    <input type="text" name="${name}" value="${escapeHtml(str(name))}" placeholder="${escapeHtml(placeholder)}"></label>`;
+};
+
+/** The tag icon table: every built-in tag plus custom tags used on this map, each with its icon. */
+function tagIconTable(map: MapData): string {
+  const overrides = tagIconOverrides();
+  const custom = new Set<string>();
+  for (const hex of Object.values(map.hexes)) for (const t of hex.tags) if (!(t in TAG_ICONS)) custom.add(t);
+  const tags = [...Object.keys(TAG_ICONS), ...[...custom].sort()];
+  const rows = tags
+    .map((tag) => {
+      const key = `ti.${tag}`;
+      if (f[key] === undefined) f[key] = overrides[tag] ?? "";
+      return `<tr><td>${escapeHtml(tag)}</td><td>${iconInput(key, "", TAG_ICONS[tag] ?? DEFAULT_TAG_ICON)}</td></tr>`;
+    })
+    .join("");
+  return `<details class="pf1hex-tag-icons"><summary>Tag icons (Font Awesome names)</summary>
+    <table class="pf1hex-table">${rows}</table>
+    <div class="buttons"><button type="button" data-action="saveTagIcons">Save tag icons</button></div></details>`;
+}
+
+async function saveTagIcons(): Promise<void> {
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(f)) {
+    if (!key.startsWith("ti.")) continue;
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    const icon = normalizeIcon(text);
+    if (!icon) return notify("warn", `"${text}" is not a Font Awesome icon name.`);
+    next[key.slice(3)] = icon;
+  }
+  await game.settings.set(MODULE_ID, "tagIcons", JSON.stringify(next));
+  notify("info", "Tag icons saved.");
+}
+
 const difficultySelect = (name: string) =>
   `<select name="${name}">${DIFFICULTIES.map((d) => opt(d, d, str(name))).join("")}</select>`;
 
@@ -423,7 +495,7 @@ function toolPanel(map: MapData): string {
         regionEdit === null
           ? `<button type="button" data-action="newRegion"><i class="fa-solid fa-plus"></i> New region</button>`
           : `<fieldset><legend>${regionEdit ? "Edit" : "New"} region</legend>
-              ${input("rg.name", "Name")}${input("rg.color", "Colour", "color")}
+              ${input("rg.name", "Name")}${colorField("rg.color", "Colour")}
               ${input("rg.table", "Encounter RollTable UUID")}
               ${input("rg.dcMods", "DC mods (role:mod, * = all)")}
               ${input("rg.water", "Water multiplier", "number")}${input("rg.storm", "Storm threshold", "number")}
@@ -442,7 +514,8 @@ function toolPanel(map: MapData): string {
     case "tags":
       return `<label>Tag <select name="tag">${UC_TAGS.map((t) => opt(t, t, str("tag"))).join("")}</select></label>
         ${input("customTag", "Custom tag (overrides)")}
-        <p class="hint">Drag to toggle: the first hex decides add or remove.</p>`;
+        <p class="hint">Drag to toggle: the first hex decides add or remove.</p>
+        ${tagIconTable(map)}`;
     case "erase":
       return `<p class="hint">Drag to erase hex records (terrain, region, tags).</p>`;
     case "knowledge":
@@ -451,7 +524,8 @@ function toolPanel(map: MapData): string {
     case "landmark": {
       if (!landmarkEdit) return `<p class="hint">Click a hex to add or edit its landmark.</p>`;
       return `<fieldset><legend>Landmark at ${landmarkEdit.hex}</legend>
-        ${input("lm.name", "Name")}${textarea("lm.description", "Description")}${checkbox("lm.known", "Known to party")}
+        ${input("lm.name", "Name")}${iconInput("lm.icon", "Icon", DEFAULT_LANDMARK_ICON)}
+        ${textarea("lm.description", "Description")}${checkbox("lm.known", "Known to party")}
         <div class="buttons"><button type="button" data-action="saveLandmark">Save</button>
         <button type="button" data-action="cancelForm">Cancel</button></div></fieldset>`;
     }
@@ -462,7 +536,8 @@ function toolPanel(map: MapData): string {
         : "Click the start hex, then each adjacent hex in order.";
       const form = routeFormOpen
         ? `<fieldset><legend>${r?.id ? "Edit" : "New"} route</legend>
-            ${input("rt.name", "Name")}${input("rt.days", "Days", "number")}
+            ${input("rt.name", "Name (optional)")}${input("rt.days", "Days", "number")}
+            ${colorField("rt.color", "Line colour")}
             <label>Difficulty ${difficultySelect("rt.difficulty")}</label>
             ${input("rt.bonus", "Encounter bonus (blank = by difficulty)", "number")}
             ${textarea("rt.bargain", "Bargain (player-facing)", 2)}${checkbox("rt.known", "Known to party")}
@@ -485,7 +560,7 @@ function toolPanel(map: MapData): string {
 function listsHtml(map: MapData): string {
   const landmarks = Object.values(map.landmarks)
     .map(
-      (l) => `<li>${escapeHtml(l.name)} <span class="hint">${l.hex}${l.knownToParty ? "" : " · hidden"}</span>
+      (l) => `<li><i class="fa-solid ${escapeHtml(landmarkIcon(l))} pf1hex-icon-preview"></i> ${escapeHtml(l.name)} <span class="hint">${l.hex}${l.knownToParty ? "" : " · hidden"}</span>
         <button type="button" data-action="editLandmark" data-id="${l.id}"><i class="fa-solid fa-pen"></i></button>
         <button type="button" data-action="deleteLandmark" data-id="${l.id}"><i class="fa-solid fa-trash"></i></button></li>`,
     )
@@ -509,9 +584,8 @@ function renderPainter(): string {
     (t) => `<button type="button" class="${t.id === tool ? "active" : ""}" data-action="tool" data-tool="${t.id}" title="${t.label}">
       <i class="fa-solid ${t.icon}"></i> ${t.label}</button>`,
   ).join("");
-  const baseColor = map.baseColor || DEFAULT_BASE_COLOR;
   const mapRow = `<div class="pf1hex-row" title="Border colour for hexes that are not in a region">
-    <label>Map border <input type="color" name="mapColor" value="${baseColor}"></label>
+    ${colorField("mapColor", "Map border")}
     <button type="button" data-action="saveMapColor">Set</button></div>`;
   const mapDefaults = `<details class="pf1hex-map-defaults"><summary>Map defaults &amp; rules (hexes outside any region)</summary>
     <fieldset><legend>New hexes start as</legend>
@@ -553,7 +627,8 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
   newRegion: () =>
     guarded(() => {
       regionEdit = "";
-      Object.assign(f, { "rg.name": "", "rg.color": "#cc3333", "rg.table": "", "rg.dcMods": "", "rg.water": "1", "rg.storm": "" });
+      Object.assign(f, { "rg.name": "", "rg.table": "", "rg.dcMods": "", "rg.water": "1", "rg.storm": "" });
+      colorIntoForm("rg.color", null, "#cc3333");
       defaultsIntoForm("rg.d", undefined);
     }),
   editRegion: (_e, t) =>
@@ -563,21 +638,22 @@ const actions: Record<string, (event: Event, target: HTMLElement) => Promise<voi
       regionEdit = r.id;
       Object.assign(f, {
         "rg.name": r.name,
-        "rg.color": r.color,
         "rg.table": r.encounterTable ?? "",
         "rg.dcMods": formatDcMods(r.dcMods),
         "rg.water": String(r.waterMultiplier),
         "rg.storm": r.stormThreshold === null ? "" : String(r.stormThreshold),
       });
       defaultsIntoForm("rg.d", r.defaults);
+      colorIntoForm("rg.color", r.color, "#cc3333");
     }),
   saveRegion: () => guarded(saveRegion),
   saveMapDefaults: () => guarded(saveMapDefaults),
+  saveTagIcons: () => guarded(saveTagIcons),
   restampMap: () => guarded(restampMap),
   saveMapColor: () =>
     guarded(async () => {
       const map = cloneMap();
-      map.baseColor = str("mapColor") || DEFAULT_BASE_COLOR;
+      map.baseColor = colorFromForm("mapColor", DEFAULT_BASE_COLOR);
       await store.setMap(map);
     }),
   deleteRegion: (_e, t) => guarded(() => deleteRegion(id(t))),
@@ -638,6 +714,12 @@ function onFieldChange(event: Event): void {
   const el = event.target as HTMLInputElement;
   if (!el?.name) return;
   f[el.name] = el.type === "checkbox" ? el.checked : el.value;
+  const preview = el.type === "text" ? el.parentElement?.querySelector(".pf1hex-icon-preview") : null;
+  if (preview) preview.className = `fa-solid ${normalizeIcon(el.value) ?? el.placeholder} pf1hex-icon-preview`;
+  if (el.type === "range") {
+    const readout = el.parentElement?.querySelector(".hint");
+    if (readout) readout.textContent = `${el.value}%`;
+  }
   if (event.type !== "change") return;
   if (el.name === "terrain") {
     f.difficulty = TERRAINS[el.value]?.difficulty ?? f.difficulty;

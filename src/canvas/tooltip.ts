@@ -70,17 +70,33 @@ function show(key: HexKey, clientX: number, clientY: number): void {
   place(clientX, clientY);
 }
 
+/**
+ * Is the canvas itself under the cursor? PIXI tracks pointer moves across the whole page, so without this the
+ * tooltip would show through character sheets and other windows.
+ */
+function overCanvas(clientX: number, clientY: number): boolean {
+  const board = canvas?.app?.view ?? document.getElementById("board");
+  const under = document.elementFromPoint?.(clientX, clientY);
+  return !!board && under === board;
+}
+
+let pointer = { x: 0, y: 0 };
+
 function onMove(event: any): void {
-  if (!enabled() || !canvas?.grid?.isHexagonal) return hide();
+  const clientX = event.clientX ?? event.client?.x ?? 0;
+  const clientY = event.clientY ?? event.client?.y ?? 0;
+  pointer = { x: clientX, y: clientY };
+  if (!enabled() || !canvas?.grid?.isHexagonal || !overCanvas(clientX, clientY)) return hide();
   const pos = event.getLocalPosition(canvas.stage);
   const o = canvas.grid.getOffset({ x: pos.x, y: pos.y });
   const key = `${o.i},${o.j}`;
-  const clientX = event.clientX ?? event.client?.x ?? 0;
-  const clientY = event.clientY ?? event.client?.y ?? 0;
   if (key === lastKey) return place(clientX, clientY);
   hide();
   lastKey = key;
-  timer = setTimeout(() => show(key, clientX, clientY), DELAY_MS);
+  timer = setTimeout(() => {
+    // The cursor may have moved onto a window during the delay.
+    if (overCanvas(pointer.x, pointer.y)) show(key, pointer.x, pointer.y);
+  }, DELAY_MS);
 }
 
 export function attachTooltip(): void {

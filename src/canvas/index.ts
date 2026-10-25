@@ -5,6 +5,8 @@ import { hexUi } from "../ui";
 import { drawLayer, teardownLayer } from "./layer";
 import { closePainter, getPlottedPath, openPainter } from "./painter";
 import { attachTooltip, detachTooltip, registerTooltipSetting } from "./tooltip";
+import { getView, onViewChange, registerViewSetting, setView } from "./view";
+import { openViewPanel } from "./view-panel";
 
 // Shared terrain palette (the UI mini-map uses it too).
 export { TERRAINS, terrainFill } from "./terrain";
@@ -23,6 +25,8 @@ function scheduleRedraw(): void {
 export const hexCanvas = {
   register() {
     registerTooltipSetting();
+    registerViewSetting();
+    onViewChange(scheduleRedraw);
     Hooks.on("canvasReady", () => {
       drawLayer();
       attachTooltip();
@@ -60,6 +64,15 @@ export const hexCanvas = {
         visible: hex,
         onChange: () => hexUi.openTravel(),
       };
+      tools["pf1hex-view"] = {
+        name: "pf1hex-view",
+        title: "Hex View",
+        icon: "fa-solid fa-eye",
+        order: 103,
+        button: true,
+        visible: hex,
+        onChange: () => openViewPanel(),
+      };
       tools["pf1hex-caravan"] = {
         name: "pf1hex-caravan",
         title: "Caravan",
@@ -74,4 +87,7 @@ export const hexCanvas = {
   openPainter,
   redraw: drawLayer,
   getPlottedPath,
+  getView,
+  setView,
+  openViewPanel,
 } satisfies CanvasApi;

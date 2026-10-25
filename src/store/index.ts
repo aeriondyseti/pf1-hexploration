@@ -92,6 +92,7 @@ export const store = {
     register("caravanActor");
     register("roles");
     register("settings");
+    register("tagIcons"); // JSON: tag -> Font Awesome icon name (overrides the built-in table)
 
     const caravanUuid = () => game.settings.get(MODULE_ID, "caravanActor") as string;
     const relevantActor = (actor: any) =>

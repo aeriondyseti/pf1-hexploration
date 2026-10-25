@@ -31,7 +31,7 @@ describe("hexInfo", () => {
   it("shows landmarks and the caravan on the start hex", () => {
     const info = hexInfo(map, "7,8", { gm: false, caravanHere: true })!;
     expect(info.title).toBe("Urban · Easy");
-    expect(info.lines.slice(0, 2)).toEqual(["★ Sentinel's Watch", "The caravan is here"]);
+    expect(info.lines.slice(0, 2)).toEqual(["Landmark: Sentinel's Watch", "The caravan is here"]);
   });
 
   it("player view: no GM tuning or knowledge line", () => {

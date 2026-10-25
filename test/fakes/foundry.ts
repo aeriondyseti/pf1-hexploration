@@ -89,6 +89,21 @@ export class FakeDocument {
     return this;
   }
 
+  toObject(): Record<string, any> {
+    const { world: _w, documentName: _d, parent: _p, ...rest } = this as any;
+    return structuredClone({ ...rest, flags: this.flags, system: this.system });
+  }
+
+  async delete(): Promise<this> {
+    const siblings = (this.parent as any)?.tokens ?? (this.parent as any)?.items;
+    if (siblings) {
+      const index = siblings.indexOf(this);
+      if (index >= 0) siblings.splice(index, 1);
+    }
+    this.world.registry.delete(this.uuid);
+    return this;
+  }
+
   async update(data: Record<string, unknown>): Promise<this> {
     const changes = expand(structuredClone(data));
     mergeInto(this, changes);
@@ -137,6 +152,13 @@ export class FakeActor extends FakeDocument {
     return { rolls: [{ total }] };
   }
 
+  prototypeToken = { width: 1, height: 1 };
+
+  async getTokenDocument(data: Record<string, unknown> = {}): Promise<{ toObject(): Record<string, unknown> }> {
+    const tokenData = { ...this.prototypeToken, actorId: this.id, ...data };
+    return { toObject: () => structuredClone(tokenData) };
+  }
+
   createItem(data: any): FakeDocument {
     const item = new FakeDocument(this.world, "Item", data, this);
     this.items.push(item);
@@ -162,9 +184,27 @@ export class FakeScene extends FakeDocument {
   }
 
   createToken(data: any): FakeDocument {
-    const token = new FakeDocument(this.world, "Token", { x: 0, y: 0, ...data }, this);
+    const token = new FakeDocument(this.world, "Token", { x: 0, y: 0, width: 1, height: 1, ...data }, this);
     this.tokens.push(token);
     return token;
+  }
+
+  async createEmbeddedDocuments(type: string, datas: any[]): Promise<FakeDocument[]> {
+    if (type !== "Token") throw new Error(`FakeScene can only embed Tokens, not ${type}`);
+    return datas.map((data) => {
+      const { id: _id, _id: __id, ...rest } = data;
+      return this.createToken(rest);
+    });
+  }
+
+  /** Scene bounds: a 20 x 20 hex area of 100px cells (like Scene#dimensions.sceneRect). */
+  dimensions = {
+    sceneRect: { contains: (x: number, y: number) => x >= 0 && y >= 0 && x < 2000 && y < 2000 },
+  };
+
+  /** A scene's own grid (Scene#grid); the viewed scene uses canvas.grid. */
+  get grid(): any {
+    return this.world.grid;
   }
 }
 
