@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-25
+
+### Fixed
+- The hex hover tooltip no longer shows through character sheets or other windows: it appears only while the canvas
+  itself is under the cursor.
+
 ## [0.1.13] - 2026-10-25
 
 ### Added
