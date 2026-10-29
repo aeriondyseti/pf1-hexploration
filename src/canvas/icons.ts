@@ -1,16 +1,16 @@
 // Map symbols as Font Awesome icons: landmark icons, the tag icon table, and the colour symbols are drawn in.
 // Icons are named like "fa-water". On the canvas (and in the mini-map) each icon is drawn as its Font Awesome
 // glyph in a single colour: the hex's region border colour, else dark brown. No emoji, no pre-coloured symbols.
-import { MODULE_ID, type Landmark, type MapData } from "../types";
+import type { Landmark, MapData } from "../types";
 
 /** Plain default for landmarks that don't set an icon. */
 export const DEFAULT_LANDMARK_ICON = "fa-location-dot";
-/** Default for custom tags with no icon of their own. */
+/** Fallback for a tag outside the table (should not happen after migration). */
 export const DEFAULT_TAG_ICON = "fa-tag";
 /** Symbol colour on hexes outside any region. */
 export const SYMBOL_COLOR = "#5a3a1a";
 
-/** The one table of tag icons; the GM can override any of them (world setting "tagIcons"). */
+/** One built-in icon per UC terrain element. */
 export const TAG_ICONS: Record<string, string> = {
   difficult: "fa-triangle-exclamation",
   feature: "fa-star",
@@ -43,8 +43,8 @@ export function landmarkIcon(lm: Pick<Landmark, "icon">): string {
   return normalizeIcon(lm.icon) ?? DEFAULT_LANDMARK_ICON;
 }
 
-export function tagIcon(tag: string, overrides: Record<string, string> = {}): string {
-  return normalizeIcon(overrides[tag]) ?? TAG_ICONS[tag] ?? DEFAULT_TAG_ICON;
+export function tagIcon(tag: string): string {
+  return TAG_ICONS[tag] ?? DEFAULT_TAG_ICON;
 }
 
 /** A symbol's colour on a hex: its region's border colour (opaque), else dark brown. */
@@ -55,17 +55,6 @@ export function symbolColor(map: MapData, key: string): string {
   if (hex) return `#${hex.toLowerCase()}`;
   const short = /^#?([0-9a-f]{3})[0-9a-f]?$/i.exec((color ?? "").trim())?.[1];
   return short ? `#${[...short].map((c) => c + c).join("").toLowerCase()}` : SYMBOL_COLOR;
-}
-
-/** The GM's tag icon overrides (world setting "tagIcons", a JSON object of tag -> icon name). */
-export function tagIconOverrides(): Record<string, string> {
-  try {
-    const raw = game.settings.get(MODULE_ID, "tagIcons");
-    const parsed = typeof raw === "string" && raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 export interface Glyph {

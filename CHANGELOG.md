@@ -5,6 +5,39 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-29
+
+The MVP rework (ADR-0008): the module is cut back to its core and its numbers come from published PF1 rules.
+
+### Added
+- The Caravan links travellers and pf1 vehicle actors. Each vehicle has a Driver, a Pulled-by team (Ultimate
+  Equipment team sizes), seats and a cargo capacity; travellers ride a seat or walk.
+- Party funds on the Caravan: players deposit coins from their own characters and withdraw them; NPC wages
+  (CRB: 3 sp trained, 1 sp untrained) are paid from it every day.
+- Sticky roles set on the Caravan sheet: Navigator, Scout, Forager, Wainwright, Cartographer, Healer/Cook, and a
+  Driver per vehicle. Two roles at most, −4 on both.
+- Every role is rolled automatically each day, with no dialog, at DCs drawn from the CRB, Ultimate Campaign and
+  Ultimate Combat; one summary card per day shows each roll against its DC.
+- Activities: Travel, Explore (Ultimate Campaign exploration time; reveals the hex's secrets), Forage and Rest
+  (the Wainwright repairs using 10 gp of Repair Materials carried in a vehicle; the Healer gives long-term care).
+- Players plot a course on the canvas (click a destination, shift-click waypoints) or follow a known road; the GM
+  approves the plan, then steps with Next Day or Travel all.
+- Roads: CRB road speeds, no Navigator or Driver check and no vehicle wear.
+- Vehicle wear on the pf1 vehicle's HP by terrain (d4/d6/d8, Difficult one size up, a failed Driver one more die);
+  broken vehicles move at half pace; overloaded ones at heavy-load pace, and not at all over twice capacity.
+- Terrain types from CRB Table 7-8 (plus rocky desert, settlement and water) with their road and trackless speeds.
+- Regions carry rations and water multipliers and a DC modifier; routes are highways or roads.
+
+### Changed
+- Movement is in whole hexes, at least one a day, from the slowest vehicle or walker's pace.
+- Undo restores the last day step only.
+- 0.1.x maps are migrated on load (old terrain labels mapped to the new list).
+
+### Removed
+- The claim-and-roll muster, rolling once per leg, forced march, conditions at zero supplies, route bargains
+  (effects and GM prompts), difficulty grades, custom tags, per-hex encounter mods, storm thresholds, the caravan's
+  own hold, Wagon Condition and the draft count, pack import/export, the Travel mini-map and the multi-step ledger.
+
 ## [0.1.14] - 2026-10-25
 
 ### Fixed

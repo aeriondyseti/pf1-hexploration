@@ -11,8 +11,7 @@ import {
   symbolColor,
   tagIcon,
 } from "../../src/canvas/icons";
-import { renderMiniMap } from "../../src/ui/minimap";
-import type { MapData } from "../../src/types";
+import { UC_TAGS, type MapData } from "../../src/types";
 
 describe("normalizeIcon", () => {
   it("accepts fa- names, bare names and full class strings", () => {
@@ -38,11 +37,10 @@ describe("landmark and tag icons", () => {
     expect(landmarkIcon({ icon: "not an icon!" })).toBe(DEFAULT_LANDMARK_ICON);
   });
 
-  it("tags come from one table, overridable, with a default for custom tags", () => {
+  it("each UC element has one built-in icon", () => {
+    expect(Object.keys(TAG_ICONS).sort()).toEqual([...UC_TAGS].sort());
     expect(tagIcon("hunting-ground")).toBe(TAG_ICONS["hunting-ground"]);
-    expect(tagIcon("hunting-ground", { "hunting-ground": "fa-crow" })).toBe("fa-crow");
     expect(tagIcon("ruins")).toBe(DEFAULT_TAG_ICON);
-    expect(tagIcon("ruins", { ruins: "fa-dungeon" })).toBe("fa-dungeon");
     expect(Object.values(TAG_ICONS).every((n) => normalizeIcon(n) === n)).toBe(true);
   });
 });
@@ -50,13 +48,13 @@ describe("landmark and tag icons", () => {
 describe("symbolColor", () => {
   const map: MapData = {
     hexes: {
-      "0,0": { key: "0,0", terrain: "dunes", difficulty: "hard", region: "storm", tags: [] },
-      "0,1": { key: "0,1", terrain: "dunes", difficulty: "hard", region: "short", tags: [] },
-      "0,2": { key: "0,2", terrain: "dunes", difficulty: "hard", region: null, tags: [] },
+      "0,0": { key: "0,0", terrain: "desert-sandy", region: "storm", tags: [] },
+      "0,1": { key: "0,1", terrain: "desert-sandy", region: "short", tags: [] },
+      "0,2": { key: "0,2", terrain: "desert-sandy", region: null, tags: [] },
     },
     regions: {
-      storm: { id: "storm", name: "Storm", color: "#7B5EA780", encounterTable: null, dcMods: {}, waterMultiplier: 1, stormThreshold: null },
-      short: { id: "short", name: "Short", color: "#a5c", encounterTable: null, dcMods: {}, waterMultiplier: 1, stormThreshold: null },
+      storm: { id: "storm", name: "Storm", color: "#7B5EA780", encounterTable: null, dcMods: {}, rationsMultiplier: 1, waterMultiplier: 1 },
+      short: { id: "short", name: "Short", color: "#a5c", encounterTable: null, dcMods: {}, rationsMultiplier: 1, waterMultiplier: 1 },
     },
     landmarks: {},
     routes: {},
@@ -69,11 +67,7 @@ describe("symbolColor", () => {
     expect(symbolColor(map, "9,9")).toBe(SYMBOL_COLOR);
   });
 
-  it("outside a browser there is no glyph, and the mini-map falls back to a coloured dot", () => {
+  it("outside a browser there is no glyph", () => {
     expect(iconGlyph("fa-water")).toBeNull();
-    map.landmarks.eye = { id: "eye", name: "The Eye", hex: "0,0", description: "", knownToParty: true, icon: "fa-eye" };
-    const svg = renderMiniMap(map, { grid: { columns: false, even: false } });
-    expect(svg).toContain('class="landmark"');
-    expect(svg).toContain("fill:#7b5ea7");
   });
 });

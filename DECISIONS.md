@@ -106,3 +106,20 @@ supersede rather than rewrite. Small/local choices don't need an entry.
   older one out of order could corrupt later steps (a follow-up could add "undo back to this entry"). `travel`
   methods still warn instead of returning results; giving them the same `Result` shape is a natural next step.
 
+## ADR-0008 — The MVP rework: cut to the core, roll daily, numbers from published rules
+- **Date:** 2026-10-29   **Sprint:** (planning, before Milestone 2)   **Status:** Accepted
+- **Context:** 0.1.x grew to ~5,600 lines across map authoring, a caravan hold, a claim-and-roll muster, route
+  bargains, forced march and a multi-step ledger. It was too much to maintain, fragile live (KtP #25: reset muster
+  forms, lost rolls, a premature resolve) and too many clicks at the table. One roll per leg also made roads a
+  liability: one bad roll ruined a whole leg. The owner ran a scoping interview on 2026-10-29.
+- **Decision:** Rework this repo in place to the MVP in DESIGN.md (rewritten that day). In short: roles are sticky
+  on the Caravan actor and **auto-rolled every day** when the GM steps it; DCs blend KtP with CRB, Ultimate Campaign,
+  Ultimate Combat, Ultimate Equipment and Ultimate Wilderness; roads give RAW benefits (CRB multipliers, no getting
+  lost, no driving check, no wear); supplies live in linked pf1 vehicles, which carry the wagon rules (driver,
+  team, seats, cargo, HP); the Caravan actor keeps party funds and wages; terrain types and UC elements replace
+  difficulty grades and custom tags; routes become plain roads. Invariant 4 narrows to undoing the **last** day.
+  The pending 1.15 muster fixes are dropped and Milestones 2–5 move to IDEAS.md.
+- **Consequences:** ADR-0003's leg rules (draft shortfall +1 day per animal, wholly Mapped legs auto-succeed) are
+  superseded by the vehicle and daily rules. ADR-0007's `hx.caravan` stays but its writes stop being ledger entries.
+  0.1.x maps need a migration (DESIGN §4.2). The overload rule is a house rule, since no published rule exists.
+  Several numbers are provisional (DESIGN §4.14) until the owner confirms them.

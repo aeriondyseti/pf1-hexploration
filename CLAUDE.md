@@ -8,11 +8,14 @@
 ## What this project is
 
 **PF1 Hexploration** (`pf1-hexploration`) is a Foundry VTT v13 module for the Pathfinder 1e (`pf1`) system that
-runs caravan travel as hexploration. The GM paints a hex map and named routes; the party musters caravan roles
-for each route leg and rolls once from their own sheets; the GM steps the caravan day by day while the module
-applies resource drain, conditions, encounters and map knowledge, every step undoable. It generalises the
-caravan-role and Stormlands travel systems from the owner's *Keys to Perfection* campaign. The owner plays on
-The Forge; there is no local Foundry install.
+runs caravan travel as hexploration. The GM paints a hex map of published terrain types, regions and roads; the
+party links travellers and pf1 vehicles to a Caravan actor, sets sticky roles and plans an activity; the GM
+approves and steps the days, and each day every role is auto-rolled at DCs drawn from published rules while the
+module moves the caravan, drains the vehicles' supplies, pays wages, wears the vehicles, checks encounters and
+updates map knowledge; the last day can be undone. It generalises the caravan-role and Stormlands travel systems
+from the owner's *Keys to Perfection* campaign. **Milestone 2 reworks the 0.1.x build down to this MVP** (ADR-0008):
+code that ROADMAP says a sprint removes is meant to go. The owner plays on The Forge; there is no local Foundry
+install.
 
 → Full design rationale: **[DESIGN.md](./DESIGN.md)**.
 
@@ -97,8 +100,8 @@ finding you deliberately *don't* fix** (below threshold, or deferred as out-of-s
    active GM's client validates every request and performs every world-state write.
 3. **The rules engine is pure and seeded.** Engine code has no Foundry or pf1 globals and takes an injected
    roller, so every leg outcome is reproducible and unit-testable.
-4. **Every day step is undoable.** Each automated change (drain, conditions, map state, world time) writes a
-   ledger entry that the GM can roll back.
+4. **The last day step is undoable.** Each day step snapshots everything it changes (supplies, vehicle HP, funds,
+   map knowledge, position, world time) so the GM can roll it back (narrowed from "every step" by ADR-0008).
 
 ## Tech conventions
 

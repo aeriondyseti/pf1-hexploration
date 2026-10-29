@@ -1,6 +1,6 @@
 // pf1 system adapter: every pf1 actor read/roll/condition call goes through here.
 import type { Pf1Api } from "../contracts";
-import type { RosterMember } from "../types";
+import type { Coins, Traveller, VehicleLink } from "../types";
 
 export { foundryRoller } from "./roller";
 
@@ -22,7 +22,7 @@ const SUBSKILL_PARENTS = new Set(["pro", "crf", "art", "lor"]);
 const SIZE_ORDER = ["fine", "dim", "tiny", "sm", "med", "lg", "huge", "grg", "col"];
 
 /** pf1 v11 prepares traits.size as { base: "med", value: 4 }, where value indexes pf1.config.sizeChart. */
-function sizeKey(actor: any): string | null {
+function readSizeKey(actor: any): string | null {
   const size = actor?.system?.traits?.size;
   if (typeof size === "string") return size;
   const chart = typeof pf1 !== "undefined" ? pf1?.config?.sizeChart : undefined;
@@ -51,7 +51,16 @@ function creatureTypes(actor: any): string[] {
 
 /** A pf1 roll result's total: rollSkill/rollSavingThrow return a ChatMessage or roll data. */
 function totalOf(result: any): number | null {
-  const total = result?.rolls?.[0]?.total ?? result?.total ?? result?.roll?.total;
+  // With chatMessage: false pf1 returns message data, whose rolls may be serialised JSON strings.
+  let first = result?.rolls?.[0];
+  if (typeof first === "string") {
+    try {
+      first = JSON.parse(first);
+    } catch {
+      first = null;
+    }
+  }
+  const total = first?.total ?? result?.total ?? result?.roll?.total;
   return typeof total === "number" ? total : null;
 }
 
@@ -67,10 +76,58 @@ function label(value: unknown, fallback: string): string {
   return value;
 }
 
+/** Body weight by size, lb (DESIGN §4.7, provisional). */
+const BODY_WEIGHT: Record<string, number> = {
+  fine: 1,
+  dim: 5,
+  tiny: 20,
+  sm: 40,
+  med: 180,
+  lg: 1400,
+  huge: 11000,
+  grg: 90000,
+  col: 700000,
+};
+
+/** Team strength in Large equivalents. */
+const PULL: Record<string, number> = { sm: 0.25, med: 0.5, lg: 1, huge: 2, grg: 4, col: 8 };
+
+/** Vehicle defaults by name (UE team, UCombat seats and capacity); the first match wins. */
+const VEHICLE_DEFAULTS: [string, { teamRequired: number; seats: number; cargoCapacity: number }][] = [
+  ["light wagon", { teamRequired: 1, seats: 4, cargoCapacity: 1000 }],
+  ["heavy wagon", { teamRequired: 4, seats: 4, cargoCapacity: 4000 }],
+  ["medium wagon", { teamRequired: 2, seats: 4, cargoCapacity: 2000 }],
+  ["carriage", { teamRequired: 1, seats: 4, cargoCapacity: 300 }],
+  ["wagon", { teamRequired: 2, seats: 4, cargoCapacity: 2000 }],
+  ["cart", { teamRequired: 1, seats: 2, cargoCapacity: 300 }],
+];
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** Weight of one item stack, lb: pf1's prepared total when present, else unit weight × quantity (+ contents). */
+function itemWeight(item: any): number {
+  const w = item?.system?.weight;
+  const total = num(w?.total);
+  if (total !== null) return total;
+  const qty = num(item?.system?.quantity) ?? 1;
+  const unit = num(w?.value) ?? num(w) ?? 0;
+  let weight = unit * qty;
+  if (item?.type === "container") for (const inner of item.items ?? []) weight += itemWeight(inner);
+  return weight;
+}
+
+const COIN_KEYS = ["pp", "gp", "sp", "cp"] as const;
+
+const titleCase = (s: string) => s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
 export const pf1Adapter = {
   sizeMultiplier(actor: any): number {
-    const key = sizeKey(actor);
+    const key = readSizeKey(actor);
     return (key ? SIZE_MULTIPLIERS[key] : undefined) ?? 1;
+  },
+
+  sizeKey(actor: any): string {
+    return readSizeKey(actor) ?? "med";
   },
 
   consumptionFor(actor: any): { food: number; water: number } {
@@ -82,16 +139,61 @@ export const pf1Adapter = {
     return { food: m, water: m };
   },
 
-  rosterMemberFor(actor: any, draft = false): RosterMember {
+  travellerFor(actor: any): Traveller {
     const { food, water } = pf1Adapter.consumptionFor(actor);
-    return {
-      actorUuid: actor.uuid,
-      name: actor.name,
-      food,
-      water,
-      draft,
-      npc: pf1Adapter.playerOwners(actor).length === 0,
-    };
+    return { actorUuid: actor.uuid, name: actor.name, food, water, wage: 0, seat: null };
+  },
+
+  vehicleFor(actor: any): VehicleLink {
+    const name = String(actor?.name ?? "").toLowerCase();
+    const found = VEHICLE_DEFAULTS.find(([key]) => name.includes(key))?.[1] ?? { teamRequired: 1, seats: 4, cargoCapacity: 1000 };
+    return { actorUuid: actor.uuid, name: actor.name, driver: null, team: [], ...found, milesPerDay: 16 };
+  },
+
+  isVehicle(actor: any): boolean {
+    return actor?.type === "vehicle";
+  },
+
+  landSpeed(actor: any): number {
+    const land = actor?.system?.attributes?.speed?.land;
+    return num(land?.total) ?? num(land?.base) ?? num(land) ?? 30;
+  },
+
+  riderWeight(actor: any): number {
+    const body = BODY_WEIGHT[pf1Adapter.sizeKey(actor)] ?? 180;
+    const enc = actor?.system?.attributes?.encumbrance;
+    const carried = num(enc?.carriedWeight) ?? num(enc?.carried) ?? 0;
+    return body + carried;
+  },
+
+  inventoryWeight(actor: any): number {
+    let total = 0;
+    for (const item of actor?.items ?? []) total += itemWeight(item);
+    return Math.round(total * 100) / 100;
+  },
+
+  pullStrength(actor: any): number {
+    return PULL[pf1Adapter.sizeKey(actor)] ?? 0;
+  },
+
+  vehicleHp(actor: any): { hp: number; maxHp: number } {
+    const hp = actor?.system?.attributes?.hp;
+    return { hp: num(hp?.value) ?? 0, maxHp: num(hp?.max) ?? 0 };
+  },
+
+  async setVehicleHp(actor: any, hp: number): Promise<void> {
+    await actor.update({ "system.attributes.hp.value": Math.round(hp) });
+  },
+
+  coins(actor: any): Coins {
+    const c = actor?.system?.currency ?? {};
+    return { pp: num(c.pp) ?? 0, gp: num(c.gp) ?? 0, sp: num(c.sp) ?? 0, cp: num(c.cp) ?? 0 };
+  },
+
+  async setCoins(actor: any, coins: Coins): Promise<void> {
+    const update: Record<string, number> = {};
+    for (const k of COIN_KEYS) update[`system.currency.${k}`] = Math.max(0, Math.floor(coins[k] ?? 0));
+    await actor.update(update);
   },
 
   bestSkill(actor: any, skills: string[]): string {
@@ -116,16 +218,22 @@ export const pf1Adapter = {
     return best ?? skills[0] ?? "sur";
   },
 
+  skillMod(actor: any, skillId: string): number {
+    const [main, sub] = skillId.split(".").filter((p) => p !== "subSkills");
+    const skill = actor?.system?.skills?.[main];
+    return num(sub ? skill?.subSkills?.[sub]?.mod : skill?.mod) ?? 0;
+  },
+
   skillLabel(skillId: string): string {
     const [main, sub] = skillId.split(".").filter((p) => p !== "subSkills");
     const name = label(pf1Skills()[main], main);
     return sub ? `${name} (${sub})` : name;
   },
 
-  // pf1 v11 overwrites options.flavor with its own "Skill Check" text, so the caller's flavor is
-  // not passed; the doubling penalty is labelled inside the bonus formula instead.
-  async rollSkill(actor: any, skillId: string, penalty: number, _flavor: string): Promise<number | null> {
-    const options: Record<string, unknown> = { skipDialog: true };
+  // No dialog and no chat card (the travel controller posts one card a day). pf1 v11 overwrites
+  // options.flavor, so the doubling penalty is labelled inside the bonus formula instead.
+  async rollSkill(actor: any, skillId: string, penalty: number): Promise<number | null> {
+    const options: Record<string, unknown> = { skipDialog: true, chatMessage: false };
     if (penalty > 0) options.bonus = `-${penalty}[Doubling]`;
     try {
       return totalOf(await actor.rollSkill(skillId, options));
@@ -135,21 +243,10 @@ export const pf1Adapter = {
     }
   },
 
-  async rollFort(actor: any, _flavor: string): Promise<number | null> {
-    try {
-      return totalOf(await actor.rollSavingThrow("fort", { skipDialog: true }));
-    } catch (err) {
-      console.error("pf1-hexploration | rollSavingThrow failed", err);
-      return null;
-    }
-  },
-
-  hasCondition(actor: any, condition: string): boolean {
-    return !!actor?.statuses?.has?.(condition);
-  },
-
-  async setCondition(actor: any, condition: string, on: boolean): Promise<void> {
-    await actor.setCondition(condition, on);
+  conditions(actor: any): string[] {
+    const statuses: string[] = actor?.statuses ? Array.from(actor.statuses as Iterable<string>) : [];
+    const registry = typeof pf1 !== "undefined" ? pf1?.registry?.conditions : undefined;
+    return statuses.map((id) => label(registry?.get?.(id)?.name, titleCase(String(id))));
   },
 
   playerOwners(actor: any): string[] {

@@ -1,8 +1,6 @@
 // Pure helpers for the canvas layer and painter (no Foundry globals; unit-tested).
-import type { Difficulty, GmPrompt, HexDefaults, HexKey, HexRecord, KnowledgeState, MapData, RouteEffect } from "../types";
-import { routeLabel } from "../types";
-
-export const DIFFICULTY_LETTER: Record<Difficulty, string> = { easy: "E", standard: "S", hard: "H", brutal: "B" };
+import type { HexDefaults, HexKey, HexRecord, KnowledgeState, MapData, Route, Terrain, UcTag } from "../types";
+import { TERRAIN_RULES } from "../types";
 
 export function hexKey(o: { i: number; j: number }): HexKey {
   return `${o.i},${o.j}`;
@@ -14,15 +12,13 @@ export function parseHexKey(key: HexKey): { i: number; j: number } {
 }
 
 export type BrushOp =
-  | { kind: "terrain"; terrain: string; difficulty: Difficulty; encounterMod?: number | null } // null/absent: keep
+  | { kind: "terrain"; terrain: Terrain }
   | { kind: "region"; regionId: string | null }
-  | { kind: "tag"; tag: string; add: boolean }
+  | { kind: "tag"; tag: UcTag; add: boolean }
   | { kind: "erase" };
 
 /** Where a new hex's starting values come from: a fixed fallback, or a lookup by the region it is created in. */
-export type HexDefaultsSource =
-  | { terrain: string; difficulty: Difficulty; tags?: string[]; encounterMod?: number }
-  | ((regionId: string | null) => HexDefaults);
+export type HexDefaultsSource = { terrain: Terrain; tags?: UcTag[] } | ((regionId: string | null) => HexDefaults);
 
 /**
  * The defaults stamped onto a hex created in `regionId` (DESIGN §4.2): the region's own defaults, else the map's
@@ -31,7 +27,7 @@ export type HexDefaultsSource =
 export function hexDefaultsFor(map: MapData, regionId: string | null, fallback: HexDefaults): HexDefaults {
   const region = regionId ? map.regions[regionId] : undefined;
   const d = region?.defaults ?? map.defaults ?? fallback;
-  return { terrain: d.terrain, difficulty: d.difficulty, tags: [...(d.tags ?? [])], encounterMod: d.encounterMod ?? 0 };
+  return { terrain: d.terrain, tags: [...(d.tags ?? [])] };
 }
 
 /**
@@ -41,9 +37,7 @@ export function hexDefaultsFor(map: MapData, regionId: string | null, fallback: 
  */
 export function applyBrush(map: MapData, keys: HexKey[], op: BrushOp, defaults: HexDefaultsSource): MapData {
   const lookup = (regionId: string | null): HexDefaults =>
-    typeof defaults === "function"
-      ? defaults(regionId)
-      : { terrain: defaults.terrain, difficulty: defaults.difficulty, tags: [...(defaults.tags ?? [])], encounterMod: defaults.encounterMod ?? 0 };
+    typeof defaults === "function" ? defaults(regionId) : { terrain: defaults.terrain, tags: [...(defaults.tags ?? [])] };
   const hexes = { ...map.hexes };
   for (const key of keys) {
     if (op.kind === "erase") {
@@ -54,13 +48,11 @@ export function applyBrush(map: MapData, keys: HexKey[], op: BrushOp, defaults: 
     if (!prev) {
       const regionId = op.kind === "region" ? op.regionId : null;
       const d = lookup(regionId);
-      prev = { key, terrain: d.terrain, difficulty: d.difficulty, region: null, tags: d.tags, ...(d.encounterMod ? { encounterMod: d.encounterMod } : {}) };
+      prev = { key, terrain: d.terrain, region: null, tags: [...d.tags] };
     }
     const next: HexRecord = { ...prev, tags: [...prev.tags] };
     if (op.kind === "terrain") {
       next.terrain = op.terrain;
-      next.difficulty = op.difficulty;
-      if (op.encounterMod !== undefined && op.encounterMod !== null) next.encounterMod = op.encounterMod;
     } else if (op.kind === "region") {
       next.region = op.regionId;
     } else if (op.add) {
@@ -73,7 +65,7 @@ export function applyBrush(map: MapData, keys: HexKey[], op: BrushOp, defaults: 
   return { ...map, hexes };
 }
 
-/** Re-stamp every hex outside any region with the map's defaults (terrain, difficulty, tags, encounter mod). */
+/** Re-stamp every hex outside any region with the map's defaults (terrain and tags). */
 export function restampUnregioned(map: MapData): { map: MapData; count: number } {
   if (!map.defaults) return { map, count: 0 };
   const d = map.defaults;
@@ -81,10 +73,15 @@ export function restampUnregioned(map: MapData): { map: MapData; count: number }
   let count = 0;
   for (const [key, hex] of Object.entries(map.hexes)) {
     if (hex.region && map.regions[hex.region]) continue;
-    hexes[key] = { ...hex, terrain: d.terrain, difficulty: d.difficulty, tags: [...d.tags], encounterMod: d.encounterMod };
+    hexes[key] = { ...hex, terrain: d.terrain, tags: [...d.tags] };
     count++;
   }
   return { map: { ...map, hexes }, count };
+}
+
+/** A route's display name: its own, else "Unnamed highway" / "Unnamed road". */
+export function routeLabel(route: Pick<Route, "name" | "kind">): string {
+  return route.name?.trim() || `Unnamed ${route.kind === "highway" ? "highway" : "road"}`;
 }
 
 /**
@@ -119,63 +116,6 @@ export function formatDcMods(mods: Record<string, number>): string {
   return Object.entries(mods)
     .map(([k, v]) => `${k}:${v}`)
     .join(", ");
-}
-
-const SUPPLY = ["rations", "water"];
-const TRACKS = ["rations", "water", "wagon"];
-const KNOWLEDGE: KnowledgeState[] = ["unknown", "explored", "mapped"];
-const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
-const isStr = (v: unknown) => typeof v === "string" && v.length > 0;
-
-function parseArray(text: string, what: string): unknown[] {
-  if (!text.trim()) return [];
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch (err) {
-    throw new Error(`${what}: invalid JSON (${(err as Error).message}).`);
-  }
-  if (!Array.isArray(value)) throw new Error(`${what}: must be a JSON array.`);
-  return value;
-}
-
-function validEffect(e: any): boolean {
-  switch (e?.type) {
-    case "replenish":
-      return (SUPPLY.includes(e.track) || e.track === "either") && isNum(e.amount);
-    case "extraDrain":
-      return TRACKS.includes(e.track) && isNum(e.perDay);
-    case "dcMod":
-      return isStr(e.roleId) && isNum(e.mod);
-    case "setMapState":
-      return KNOWLEDGE.includes(e.state);
-    default:
-      return false;
-  }
-}
-
-function validPrompt(p: any): boolean {
-  const w = p?.when;
-  const whenOk =
-    ((w?.kind === "roleSuccess" || w?.kind === "roleFailure") && isStr(w.roleId)) ||
-    (w?.kind === "day" && Number.isInteger(w.day) && w.day >= 1);
-  return whenOk && isStr(p.text);
-}
-
-export function parseEffects(text: string): RouteEffect[] {
-  const arr = parseArray(text, "Effects");
-  arr.forEach((e, n) => {
-    if (!validEffect(e)) throw new Error(`Effects: entry ${n + 1} is not a valid route effect.`);
-  });
-  return arr as RouteEffect[];
-}
-
-export function parsePrompts(text: string): GmPrompt[] {
-  const arr = parseArray(text, "GM prompts");
-  arr.forEach((p, n) => {
-    if (!validPrompt(p)) throw new Error(`GM prompts: entry ${n + 1} needs a valid "when" and "text".`);
-  });
-  return arr as GmPrompt[];
 }
 
 /** "#rrggbb" / "#rgb" -> 0xrrggbb; anything else -> fallback. */
@@ -253,48 +193,48 @@ export function escapeHtml(value: unknown): string {
 }
 
 export interface HexInfo {
-  title: string; // e.g. "Dunes · Hard"
+  title: string; // the terrain label, or "Uncharted"
   lines: string[]; // plain text; the tooltip escapes it
 }
 
-const TERRAIN_LABEL = (terrain: string) => terrain.charAt(0).toUpperCase() + terrain.slice(1);
-const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: "Easy", standard: "Standard", hard: "Hard", brutal: "Brutal" };
+const TAG_LABEL = (tag: string) => tag.replace(/-/g, " ");
 
 /**
  * What the hover tooltip shows for one hex. `map` must already be the viewer's map: the full map for the GM,
- * `store.partyView()` for players (invariant 1). `gm` adds GM-only detail (party knowledge, region tuning).
+ * `store.partyView()` for players (invariant 1). `gm` adds GM-only detail (party knowledge, region rules).
  * Returns null when there is nothing to show (no record and no landmark/route/caravan on the hex).
  */
 export function hexInfo(
   map: MapData,
   key: HexKey,
-  opts: { gm: boolean; knowledge?: KnowledgeState; caravanHere?: boolean; terrainLabel?: (t: string) => string },
+  opts: { gm: boolean; knowledge?: KnowledgeState; caravanHere?: boolean; terrainLabel?: (t: string) => string; tableName?: (uuid: string) => string },
 ): HexInfo | null {
   const hex = map.hexes[key];
   const landmarks = Object.values(map.landmarks).filter((l) => l.hex === key);
   const routes = Object.values(map.routes).filter((r) => r.from === key || r.hexes.includes(key));
   if (!hex && !landmarks.length && !routes.length && !opts.caravanHere) return null;
 
-  const label = opts.terrainLabel ?? TERRAIN_LABEL;
-  const title = hex ? `${label(hex.terrain)} · ${DIFFICULTY_LABEL[hex.difficulty] ?? hex.difficulty}` : "Uncharted";
+  const label = opts.terrainLabel ?? ((t: string) => TERRAIN_RULES[t as Terrain]?.label ?? t);
+  const title = hex ? label(hex.terrain) : "Uncharted";
   const lines: string[] = [];
-  for (const l of landmarks) lines.push(`Landmark: ${l.name}${opts.gm && !l.knownToParty ? " (hidden)" : ""}`);
-  if (opts.caravanHere) lines.push("The caravan is here");
+  if (hex?.tags.length) lines.push(`Elements: ${hex.tags.map(TAG_LABEL).join(", ")}`);
   const region = hex?.region ? map.regions[hex.region] : undefined;
-  if (region) {
-    let text = `Region: ${region.name}`;
-    if (opts.gm) {
-      const mods = Object.entries(region.dcMods ?? {}).map(([k, v]) => `${k === "*" ? "all" : k} ${v >= 0 ? "+" : ""}${v}`);
-      if (mods.length) text += ` (DC ${mods.join(", ")})`;
-      if (region.waterMultiplier && region.waterMultiplier !== 1) text += ` · water ×${region.waterMultiplier}`;
-      text += region.encounterTable ? " · encounter table set" : " · no encounter table";
+  if (region) lines.push(`Region: ${region.name}`);
+  for (const l of landmarks) lines.push(`Landmark: ${l.name}${opts.gm && !l.knownToParty ? " (hidden)" : ""}`);
+  for (const r of routes) lines.push(`Route: ${routeLabel(r)} (${r.kind === "highway" ? "highway" : "road"})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
+  if (opts.caravanHere) lines.push("The caravan is here");
+  if (opts.gm) {
+    const rules = region ?? map.rules;
+    if (rules) {
+      const parts: string[] = [rules.encounterTable ? `table ${opts.tableName?.(rules.encounterTable) ?? rules.encounterTable}` : "no encounter table"];
+      if ((rules.rationsMultiplier ?? 1) !== 1) parts.push(`rations ×${rules.rationsMultiplier}`);
+      if ((rules.waterMultiplier ?? 1) !== 1) parts.push(`water ×${rules.waterMultiplier}`);
+      const mods = Object.entries(rules.dcMods ?? {}).map(([k, v]) => `${k === "*" ? "all" : k} ${v >= 0 ? "+" : ""}${v}`);
+      if (mods.length) parts.push(`DC ${mods.join(", ")}`);
+      lines.push(`${region ? "Region" : "Map"} rules: ${parts.join(" · ")}`);
     }
-    lines.push(text);
+    lines.push(`Party knows: ${opts.knowledge ?? "unknown"}`);
   }
-  if (hex?.tags.length) lines.push(`Tags: ${hex.tags.join(", ")}`);
-  if (hex?.encounterMod) lines.push(`Encounter ${hex.encounterMod > 0 ? "+" : ""}${hex.encounterMod}`);
-  for (const r of routes) lines.push(`Route: ${routeLabel(r)} (${r.days} d, ${DIFFICULTY_LABEL[r.difficulty] ?? r.difficulty})${opts.gm && !r.knownToParty ? " · hidden" : ""}`);
-  if (opts.gm) lines.push(`Party knows: ${opts.knowledge ?? "unknown"}`);
   return { title, lines };
 }
 

@@ -26,15 +26,6 @@
 .pf1hex .pf1hex-outcomes li.failure { color: var(--color-level-error, #c4453a); }
 .pf1hex .pf1hex-prompts li { font-style: italic; }
 .pf1hex .pf1hex-export, .pf1hex textarea { width: 100%; font-family: monospace; font-size: 0.85em; }
-.pf1hex .pf1hex-map { display: flex; justify-content: center; }
-.pf1hex .pf1hex-minimap { width: 100%; max-height: 260px; background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
-.pf1hex .pf1hex-minimap .hex { stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.6; }
-.pf1hex .pf1hex-minimap .route { fill: none; stroke: #f5e6b8; stroke-width: 1.4; stroke-dasharray: 3 2; opacity: 0.85; }
-.pf1hex .pf1hex-minimap .route[data-action] { cursor: pointer; stroke-width: 2.4; }
-.pf1hex .pf1hex-minimap .route.selected { stroke: #ffd24a; stroke-dasharray: none; opacity: 1; }
-.pf1hex .pf1hex-minimap .leg-path { fill: none; stroke: #ff6400; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-.pf1hex .pf1hex-minimap .landmark { fill: #fff; stroke: #222; stroke-width: 0.8; }
-.pf1hex .pf1hex-minimap .caravan { fill: #ff6400; stroke: #fff; stroke-width: 1; }
 
 /* painter */
 .pf1hex-painter .window-content { display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; }
@@ -83,8 +74,67 @@
 .pf1hex-color .hint { min-width: 2.5rem; text-align: right; }
 
 /* icons */
-.pf1hex .pf1hex-minimap .landmark-icon { stroke: #fff; stroke-width: 0.6; paint-order: stroke; }
 .pf1hex-icon { display: flex; align-items: center; gap: 0.35rem; }
 .pf1hex-icon .pf1hex-icon-preview { width: 1.25em; text-align: center; color: #5a3a1a; }
 .pf1hex-icon input { flex: 1; }
 .pf1hex-tag-icons td:first-child { white-space: nowrap; padding-right: 0.5rem; }
+
+/* Caravan sheet (DESIGN §4.4, FinalCaravan mock-up) */
+.pf1hex-caravan .window-content { gap: 0.75rem; }
+.pf1hex-caravan .pf1hex-label { font-size: 0.75rem; letter-spacing: 0.06em; opacity: 0.75; margin: 0 0 0.25rem; }
+.pf1hex-caravan .pf1hex-muted { opacity: 0.65; }
+.pf1hex-caravan .pf1hex-grow { flex: 1 1 auto; min-width: 0; }
+.pf1hex-caravan .pf1hex-gmbar { padding-bottom: 0.4rem; border-bottom: 1px solid var(--color-border-light-2, #55555f); }
+.pf1hex-caravan .pf1hex-sheet-head { display: flex; align-items: center; gap: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-border-light-2, #55555f); }
+.pf1hex-caravan .pf1hex-sheet-img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; border: 1px solid #8a6a2c; flex: none; }
+.pf1hex-caravan .pf1hex-sheet-name { font-size: 1.25rem; font-weight: 600; }
+.pf1hex-caravan .pf1hex-sheet-status { font-size: 0.85rem; opacity: 0.8; }
+.pf1hex-caravan .pf1hex-sheet-hint { font-size: 0.8rem; opacity: 0.65; text-align: right; line-height: 1.4; }
+.pf1hex-caravan .pf1hex-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 0.5rem; }
+.pf1hex-caravan .pf1hex-tile { padding: 0.45rem 0.65rem; border-radius: 6px; background: rgba(0, 0, 0, 0.18); border: 1px solid var(--color-border-light-2, #34343d); }
+.pf1hex-caravan .pf1hex-tile.warn { background: rgba(138, 106, 44, 0.25); border-color: #8a6a2c; }
+.pf1hex-caravan .pf1hex-tile-label { font-size: 0.7rem; letter-spacing: 0.05em; opacity: 0.75; }
+.pf1hex-caravan .pf1hex-tile.warn .pf1hex-tile-label, .pf1hex-caravan .pf1hex-tile.warn .pf1hex-tile-value { color: #f3cb85; }
+.pf1hex-caravan .pf1hex-tile-value { font-size: 1.2rem; font-weight: 700; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf1hex-caravan .pf1hex-tile-sub { font-size: 0.72rem; opacity: 0.7; }
+.pf1hex-caravan .pf1hex-tile-buttons { display: flex; gap: 0.25rem; margin-top: 0.3rem; }
+.pf1hex-caravan .pf1hex-tile-buttons button { font-size: 0.75rem; padding: 0 0.4rem; line-height: 1.6; }
+.pf1hex-caravan .pf1hex-funds-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.5rem; border: 1px dashed #8a6a2c; border-radius: 6px; }
+.pf1hex-caravan .pf1hex-funds-form input[type="number"] { width: 4rem; }
+.pf1hex-caravan .pf1hex-funds-form select { flex: 1 1 12rem; min-width: 0; }
+.pf1hex-caravan .pf1hex-travellers td, .pf1hex-caravan .pf1hex-travellers th { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.pf1hex-caravan .pf1hex-travellers th { font-size: 0.72rem; letter-spacing: 0.05em; opacity: 0.75; font-weight: 600; }
+.pf1hex-caravan .pf1hex-travellers th.num { text-align: right; }
+.pf1hex-caravan .pf1hex-travellers tr.mine { background: rgba(111, 179, 224, 0.08); }
+.pf1hex-caravan .pf1hex-travellers select { max-width: 11rem; }
+.pf1hex-caravan .pf1hex-travellers input[type="number"] { width: 3.5rem; }
+.pf1hex-caravan .pf1hex-busy { color: #e8c88a; }
+.pf1hex-caravan .pf1hex-open { opacity: 0.5; font-size: 0.75em; cursor: pointer; }
+.pf1hex-caravan .pf1hex-icon { width: 1.6rem; height: 1.6rem; padding: 0; line-height: 1; border: none; background: none; opacity: 0.7; }
+.pf1hex-caravan .pf1hex-icon:hover { opacity: 1; }
+.pf1hex-caravan .pf1hex-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 2px 6px 2px 3px; border-radius: 5px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.15); }
+.pf1hex-caravan .pf1hex-chip[draggable="true"] { cursor: grab; }
+.pf1hex-caravan .pf1hex-chip-name { font-weight: 600; }
+.pf1hex-caravan .pf1hex-chip-x { width: 1.1rem; height: 1.1rem; padding: 0; line-height: 1; border: none; background: none; font-size: 0.7rem; opacity: 0.7; }
+.pf1hex-caravan .pf1hex-avatar { width: 1.3rem; height: 1.3rem; border-radius: 50%; background: #b9a07a; color: #141417; font-size: 0.6rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.pf1hex-caravan .pf1hex-role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.35rem 1rem; }
+.pf1hex-caravan .pf1hex-role { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.pf1hex-caravan .pf1hex-role select { flex: 0 1 12rem; min-width: 0; }
+.pf1hex-caravan .pf1hex-callout { margin-top: 0.25rem; padding: 0.25rem 0.5rem; border-radius: 4px; background: rgba(138, 106, 44, 0.25); border-left: 3px solid #8a6a2c; color: #f3cb85; font-size: 0.8rem; }
+.pf1hex-caravan .pf1hex-vehicles { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0.6rem; }
+.pf1hex-caravan .pf1hex-vehicle { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.55rem 0.7rem; border-radius: 6px; background: rgba(0, 0, 0, 0.18); border: 1px solid var(--color-border-light-2, #34343d); }
+.pf1hex-caravan .pf1hex-vehicle.warn { border-color: #8a6a2c; }
+.pf1hex-caravan .pf1hex-vehicle-head { display: flex; align-items: center; gap: 0.5rem; }
+.pf1hex-caravan .pf1hex-vehicle-head a { flex: 1; cursor: pointer; }
+.pf1hex-caravan .pf1hex-vehicle-stats { display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; opacity: 0.85; }
+.pf1hex-caravan .pf1hex-riders { font-size: 0.8rem; opacity: 0.8; }
+.pf1hex-caravan .pf1hex-zone { display: flex; flex-direction: column; gap: 0.25rem; }
+.pf1hex-caravan .pf1hex-zone-label { font-size: 0.65rem; letter-spacing: 0.06em; opacity: 0.7; }
+.pf1hex-caravan .pf1hex-team { display: flex; flex-wrap: wrap; gap: 0.3rem; min-height: 2rem; padding: 0.25rem; border-radius: 5px; border: 1px dashed rgba(255, 255, 255, 0.2); }
+.pf1hex-caravan .pf1hex-team.empty { border-color: #8a6a2c; }
+.pf1hex-caravan .pf1hex-empty { display: block; padding: 0.35rem; border-radius: 5px; border: 1px dashed #8a6a2c; background: rgba(138, 106, 44, 0.2); color: #f3cb85; font-size: 0.8rem; text-align: center; }
+.pf1hex-caravan .pf1hex-team .pf1hex-empty { border: none; background: none; padding: 0 0.25rem; align-self: center; }
+.pf1hex-caravan .pf1hex-drop { padding: 0.6rem; border-radius: 6px; border: 1px dashed rgba(255, 255, 255, 0.25); opacity: 0.75; font-size: 0.8rem; text-align: center; display: flex; align-items: center; justify-content: center; }
+.pf1hex-caravan .pf1hex-over { outline: 2px solid var(--color-border-highlight, #ff6400); outline-offset: 1px; }
+.pf1hex-caravan .pf1hex-vehicle-settings input[type="number"] { width: 4.5rem; }
+.pf1hex-caravan .pf1hex-vehicle-settings label { font-size: 0.8rem; }

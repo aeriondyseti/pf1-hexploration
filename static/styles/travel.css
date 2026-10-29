@@ -1,0 +1,22 @@
+/* Travel window, daily summary card and the course-plotting bar (MVP rework). */
+.pf1hex-travel-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.25rem; }
+.pf1hex-travel-head { font-size: 0.95em; opacity: 0.9; }
+.pf1hex-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.pf1hex-tab { flex: 1 1 auto; }
+.pf1hex-tab.active { outline: 2px solid #e8b25a; font-weight: 600; }
+.pf1hex-travel .pf1hex-row { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
+.pf1hex-travel .pf1hex-primary { font-weight: 700; }
+.pf1hex-note { font-size: 0.85em; opacity: 0.8; margin: 0; }
+.pf1hex-checks { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.pf1hex-checks td { padding: 1px 4px; border-bottom: 1px solid rgba(127, 127, 127, 0.25); }
+.pf1hex-ok { color: #2e8b57; font-weight: 700; }
+.pf1hex-bad { color: #c0392b; font-weight: 700; }
+.pf1hex-card h3 { margin: 0 0 0.25rem; }
+.pf1hex-card p { margin: 0.2rem 0; }
+.pf1hex-course-hint {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 100;
+  display: flex; gap: 0.6rem; align-items: center; padding: 6px 12px; border-radius: 8px;
+  background: rgba(20, 20, 23, 0.92); color: #ece9e2; font-size: 13px; pointer-events: auto;
+}
+.pf1hex-course-hint button { width: auto; padding: 2px 10px; line-height: 1.6; }
+.pf1hex-course-hint kbd { background: #2b2b33; border-radius: 3px; padding: 0 4px; }

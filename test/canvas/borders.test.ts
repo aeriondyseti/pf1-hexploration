@@ -22,8 +22,8 @@ const geometry = {
   neighbourAt: (p: { x: number; y: number }) => `${Math.floor(p.y / S)},${Math.floor(p.x / S)}`,
 };
 
-const hex = (key: string, region: string | null = null): HexRecord => ({ key, terrain: "dunes", difficulty: "easy", region, tags: [] });
-const region = (id: string, color: string): Region => ({ id, name: id, color, encounterTable: null, dcMods: {}, waterMultiplier: 1, stormThreshold: null });
+const hex = (key: string, region: string | null = null): HexRecord => ({ key, terrain: "desert-sandy", region, tags: [] });
+const region = (id: string, color: string): Region => ({ id, name: id, color, encounterTable: null, dcMods: {}, rationsMultiplier: 1, waterMultiplier: 1 });
 const mapOf = (hexes: HexRecord[], regions: Region[] = [], baseColor?: string): MapData => ({
   baseColor,
   hexes: Object.fromEntries(hexes.map((h) => [h.key, h])),

@@ -6,16 +6,16 @@ import type { Request } from "../../src/types";
 describe("authority", () => {
   let world: ReturnType<typeof createWorld>;
   const seen: { userId: string; handledBy: string; isGM: boolean }[] = [];
-  const claim: Request = { type: "claimRole", roleId: "scout", actorUuid: "Actor.a" };
+  const claim: Request = { type: "setRole", roleId: "scout", actorUuid: "Actor.a" };
 
   beforeEach(() => {
     seen.length = 0;
     world = createWorld();
-    authority.registerHandler("claimRole", async (_request, userId) => {
+    authority.registerHandler("setRole", async (_request, userId) => {
       seen.push({ userId, handledBy: game.user.id, isGM: game.user.isGM });
       return { ok: true };
     });
-    authority.registerHandler("releaseRole", async () => {
+    authority.registerHandler("askStop", async () => {
       throw new Error("Role not held");
     });
     for (const client of [world.gm, world.player]) {
@@ -52,7 +52,7 @@ describe("authority", () => {
     useClient(world, world.player);
     expect(await authority.send({ type: "bogus" } as any)).toMatchObject({ ok: false, error: expect.stringContaining("Unknown") });
     expect(await authority.send(null as any)).toEqual({ ok: false, error: "Malformed request" });
-    expect(await authority.send({ type: "releaseRole", roleId: "scout", actorUuid: "Actor.a" })).toEqual({
+    expect(await authority.send({ type: "askStop" })).toEqual({
       ok: false,
       error: "Role not held",
     });

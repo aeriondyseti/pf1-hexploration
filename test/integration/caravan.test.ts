@@ -1,150 +1,212 @@
-// hx.caravan: placement and roster edits return typed results, write one ledger entry each, and undo cleanly.
+// hx.caravan on the MVP model: placement, travellers and vehicles, seats/drivers/teams, sticky roles and party
+// funds. Players' edits go through the authority to the GM's client, which checks ownership.
 import { beforeEach, describe, expect, it } from "vitest";
 import { createWorld, useClient, type FakeActor, type FakeScene, type FakeWorld } from "../fakes/foundry";
+import { authority } from "../../src/authority";
 import { caravan } from "../../src/caravan";
-import { ledger } from "../../src/ledger";
 import { store } from "../../src/store";
-import { travel } from "../../src/travel";
 import { CARAVAN_TYPE, type CaravanResult } from "../../src/types";
 
 let world: FakeWorld & { gm: any; player: any };
-let wagon: FakeActor;
+let caravanActor: FakeActor;
 let scene: FakeScene;
+let wagon: FakeActor;
+let pc: FakeActor; // owned by the player
+let horse: FakeActor; // owned by the player
+let npc: FakeActor; // GM's
 
 const ok = (r: CaravanResult) => {
   if (!r.ok) throw new Error(`expected ok, got ${r.code}: ${r.error}`);
   return r;
 };
-const tokensOf = () => scene.tokens.filter((t: any) => t.actorId === wagon.id);
+const tokensOf = () => scene.tokens.filter((t: any) => t.actorId === caravanActor.id);
+const asPlayer = () => useClient(world, world.player);
+const asGM = () => useClient(world, world.gm);
 
 beforeEach(async () => {
   world = createWorld();
   store.registerSettings();
-  useClient(world, world.gm);
+  for (const client of [world.gm, world.player]) {
+    useClient(world, client);
+    authority.init();
+  }
+  asGM();
+  caravan.init();
   scene = world.createScene({ id: "scene1", name: "Stormlands" });
-  wagon = world.createActor({ name: "Wagon", type: CARAVAN_TYPE });
-  await store.setCaravanActor(wagon.uuid);
+  caravanActor = world.createActor({ name: "The Company", type: CARAVAN_TYPE });
+  await store.setCaravanActor(caravanActor.uuid);
+  const playerId = world.player.user.id;
+  wagon = world.createActor({ name: "Covered Wagon", type: "vehicle", system: { attributes: { hp: { value: 20, max: 40 } } } });
+  pc = world.createActor({ name: "Mira", type: "character", owners: [playerId], system: { currency: { pp: 0, gp: 10, sp: 3, cp: 0 } } });
+  horse = world.createActor({ name: "Draft Horse", type: "npc", owners: [playerId], system: { traits: { size: "lg" } } });
+  npc = world.createActor({ name: "Bram", type: "npc", system: { skills: { han: { mod: 5 } } } });
 });
 
 describe("placement", () => {
-  it("place, move, place again: one token, and position follows it", async () => {
-    const first = ok(await caravan.place("7,8"));
+  it("place, move, unplace: one token and the position follows it", async () => {
+    expect(ok(await caravan.place("7,8")).caravan).toMatchObject({ position: "7,8", sceneId: "scene1" });
     expect(tokensOf()).toHaveLength(1);
-    expect(first.caravan).toMatchObject({ position: "7,8", sceneId: "scene1" });
-    expect(tokensOf()[0]).toMatchObject({ x: 800, y: 700, actorLink: true }); // centre (850, 750) minus half a cell
-
-    ok(await caravan.place("7,9"));
+    expect(tokensOf()[0]).toMatchObject({ x: 800, y: 700, actorLink: true });
     ok(await caravan.place("3,4"));
     expect(tokensOf()).toHaveLength(1);
     expect(tokensOf()[0]).toMatchObject({ x: 400, y: 300 });
-    expect(caravan.get().position).toBe("3,4");
-  });
-
-  it("returns the ledger id of its entry, and undo walks back each placement", async () => {
-    const placed = ok(await caravan.place("7,8"));
-    expect(placed.ledgerId).toBe(ledger.entries().at(-1)!.id);
-    expect(ledger.entries().at(-1)!.label).toBe("Place caravan");
-    ok(await caravan.place("7,9"));
-
-    await ledger.undoLast();
-    expect(tokensOf()[0]).toMatchObject({ x: 800, y: 700 });
-    expect(caravan.get().position).toBe("7,8");
-    await ledger.undoLast();
-    expect(tokensOf()).toHaveLength(0); // undoing the first placement removes the token it created
-    expect(caravan.get().position).toBeNull();
-  });
-
-  it("unplace removes the token and clears the position; undo puts it back", async () => {
-    ok(await caravan.place("7,8"));
-    const removed = ok(await caravan.unplace());
+    expect(ok(await caravan.unplace()).caravan).toMatchObject({ position: null, sceneId: null });
     expect(tokensOf()).toHaveLength(0);
-    expect(removed.caravan).toMatchObject({ position: null, sceneId: null });
-    await ledger.undoLast();
-    expect(tokensOf()).toHaveLength(1);
-    expect(caravan.get().position).toBe("7,8");
   });
 
-  it("refuses mid-leg, off the grid, on a non-hex scene and for bad keys", async () => {
+  it("refuses off the grid, bad keys, during a trip and on a player's client", async () => {
     expect(await caravan.place("99,99")).toMatchObject({ ok: false, code: "off-grid" });
     expect(await caravan.place("7")).toMatchObject({ ok: false, code: "bad-value" });
-    world.grid.isHexagonal = false;
-    expect(await caravan.place("7,8")).toMatchObject({ ok: false, code: "not-hex-scene" });
-    world.grid.isHexagonal = true;
-
-    ok(await caravan.place("7,8"));
-    await travel.startLeg({ routeId: null, from: "7,8", path: ["7,9"], baseDays: 1, difficulty: "easy", encounterBonus: 0, effects: [], prompts: [], regionId: null });
-    expect(await caravan.place("7,9")).toMatchObject({ ok: false, code: "leg-active" });
-    expect(await caravan.unplace()).toMatchObject({ ok: false, code: "leg-active" });
-  });
-});
-
-describe("roster", () => {
-  it("adding the same actor twice is refused and leaves the roster unchanged", async () => {
-    const camel = world.createActor({ name: "Atan", type: "npc" });
-    ok(await caravan.add(camel.uuid, { draft: true }));
-    const before = caravan.get().roster;
-    expect(await caravan.add(camel.uuid)).toMatchObject({ ok: false, code: "duplicate" });
-    expect(caravan.get().roster).toEqual(before);
-    expect(before[0]).toMatchObject({ name: "Atan", draft: true });
-  });
-
-  it("refuses unknown actors, caravans, and edits to non-members", async () => {
-    expect(await caravan.add("Actor.nope")).toMatchObject({ ok: false, code: "unknown-actor" });
-    expect(await caravan.add(world.createActor({ name: "Other wagon", type: CARAVAN_TYPE }).uuid)).toMatchObject({ ok: false, code: "caravan-actor" });
-    expect(await caravan.remove("Actor.nope")).toMatchObject({ ok: false, code: "not-member" });
-    expect(await caravan.update("Actor.nope", { draft: true })).toMatchObject({ ok: false, code: "not-member" });
-  });
-
-  it("removing a role-holder mid-leg is refused and the error names the role", async () => {
-    const shemsu = world.createActor({ name: "Shemsu-Ra", type: "character" });
-    ok(await caravan.add(shemsu.uuid));
-    ok(await caravan.place("7,8"));
-    await travel.startLeg({ routeId: null, from: "7,8", path: ["7,9"], baseDays: 1, difficulty: "easy", encounterBonus: 0, effects: [], prompts: [], regionId: null });
-    const legged = structuredClone(store.getCaravan());
-    legged.leg!.assignments.push({ roleId: "navigator", actorUuid: shemsu.uuid });
-    await store.setCaravan(legged);
-
-    const refused = await caravan.remove(shemsu.uuid);
-    expect(refused).toMatchObject({ ok: false, code: "holds-role" });
-    expect(!refused.ok && refused.error).toContain("Navigator");
-    expect(caravan.member(shemsu.uuid)).not.toBeNull();
-  });
-
-  it("add three people, then undo three times: the roster is back where it started", async () => {
-    const names = ["Ayla", "Bren", "Cass"];
-    for (const name of names) ok(await caravan.add(world.createActor({ name, type: "npc" }).uuid));
-    expect(caravan.get().roster.map((m) => m.name)).toEqual(names);
-    expect(ledger.entries().slice(-3).map((e) => e.label)).toEqual(names.map((n) => `Add to roster: ${n}`));
-    for (let n = 0; n < 3; n++) await ledger.undoLast();
-    expect(caravan.get().roster).toEqual([]);
-  });
-
-  it("updates one member, validates values, and finds members by name", async () => {
-    const pc = world.createActor({ name: "Zuleia Veresendi", type: "character" });
-    ok(await caravan.add(pc.uuid, { npc: false }));
-    expect(caravan.member(pc.uuid)!.npc).toBe(false);
-    const updated = ok(await caravan.update(pc.uuid, { food: 2, water: 1.5, draft: true }));
-    expect(updated.caravan.roster[0]).toMatchObject({ food: 2, water: 1.5, draft: true });
-    expect(await caravan.update(pc.uuid, { food: -1 })).toMatchObject({ ok: false, code: "bad-value" });
-    expect(await caravan.setDraftRequired(1.5)).toMatchObject({ ok: false, code: "bad-value" });
-    expect(ok(await caravan.setDraftRequired(2)).caravan.draftRequired).toBe(2);
-    expect(caravan.findMember("  zuleia veresendi ")?.actorUuid).toBe(pc.uuid);
-    expect(caravan.findMember("Zuleia")).toBeNull();
-    ok(await caravan.remove(pc.uuid));
-    expect(ledger.entries().at(-1)!.label).toBe("Remove from roster: Zuleia Veresendi");
-  });
-});
-
-describe("shared refusals", () => {
-  it("players get gm-only; no caravan gives no-caravan-actor", async () => {
-    const pc = world.createActor({ name: "Sabrina", type: "character" });
-    useClient(world, world.player);
-    expect(await caravan.add(pc.uuid)).toEqual({ ok: false, code: "gm-only", error: "Only the GM can change the caravan." });
+    const c = store.getCaravan();
+    c.trip = { activity: "travel", course: [], day: 0, exploreDays: 0 };
+    await store.setCaravan(c);
+    expect(await caravan.place("7,8")).toMatchObject({ ok: false, code: "trip-active" });
+    asPlayer();
     expect(await caravan.place("7,8")).toMatchObject({ ok: false, code: "gm-only" });
-    useClient(world, world.gm);
+  });
+});
 
-    await store.setCaravanActor(null);
-    wagon.type = "npc"; // no caravan-type actor left to fall back to
-    expect(await caravan.add(pc.uuid)).toMatchObject({ ok: false, code: "no-caravan-actor" });
+describe("adding and removing", () => {
+  it("links a pf1 vehicle and three actors, with vehicle defaults by name", async () => {
+    ok(await caravan.add(wagon.uuid));
+    for (const a of [pc, horse, npc]) ok(await caravan.add(a.uuid));
+    const c = caravan.get();
+    expect(c.vehicles).toEqual([
+      { actorUuid: wagon.uuid, name: "Covered Wagon", driver: null, team: [], teamRequired: 2, seats: 4, cargoCapacity: 2000, milesPerDay: 16 },
+    ]);
+    expect(c.travellers.map((t) => t.name)).toEqual(["Mira", "Draft Horse", "Bram"]);
+    expect(caravan.traveller(horse.uuid)).toMatchObject({ food: 2, water: 2, wage: 0, seat: null });
+    expect(await caravan.add(pc.uuid)).toMatchObject({ ok: false, code: "duplicate" });
+    expect(await caravan.add(world.createActor({ name: "Other", type: CARAVAN_TYPE }).uuid)).toMatchObject({ ok: false, code: "caravan-actor" });
+    expect(await caravan.add("Actor.nope")).toMatchObject({ ok: false, code: "unknown-actor" });
+  });
+
+  it("a player adds only actors they own, and the GM is whispered", async () => {
+    asPlayer();
+    ok(await caravan.add(pc.uuid));
+    expect(await caravan.add(npc.uuid)).toMatchObject({ ok: false });
+    expect(caravan.get().travellers.map((t) => t.name)).toEqual(["Mira"]);
+    const gmId = world.gm.user.id;
+    expect(world.messages.at(-1)).toMatchObject({ whisper: [gmId] });
+    expect(world.messages.at(-1).content).toContain("Mira");
+  });
+
+  it("removing a traveller clears their seat, driving, team and roles; removing a vehicle clears its seats", async () => {
+    for (const a of [wagon, pc, horse, npc]) ok(await caravan.add(a.uuid));
+    ok(await caravan.setDriver(wagon.uuid, npc.uuid));
+    ok(await caravan.setTeam(wagon.uuid, horse.uuid, true));
+    ok(await caravan.setSeat(pc.uuid, wagon.uuid));
+    ok(await caravan.setRole("scout", npc.uuid));
+    ok(await caravan.remove(npc.uuid));
+    let c = caravan.get();
+    expect(c.vehicles[0].driver).toBeNull();
+    expect(c.roles.scout).toBeNull();
+    ok(await caravan.remove(horse.uuid));
+    expect(caravan.get().vehicles[0].team).toEqual([]);
+    ok(await caravan.remove(wagon.uuid));
+    c = caravan.get();
+    expect(c.vehicles).toEqual([]);
+    expect(caravan.traveller(pc.uuid)!.seat).toBeNull();
+    expect(await caravan.remove(npc.uuid)).toMatchObject({ ok: false, code: "not-member" });
+  });
+});
+
+describe("seats, drivers and teams", () => {
+  beforeEach(async () => {
+    for (const a of [wagon, pc, horse, npc]) ok(await caravan.add(a.uuid));
+  });
+
+  it("a player seats their PC and teams their horse, but not an actor they don't own", async () => {
+    asPlayer();
+    ok(await caravan.setSeat(pc.uuid, wagon.uuid));
+    ok(await caravan.setTeam(wagon.uuid, horse.uuid, true));
+    expect(await caravan.setSeat(npc.uuid, wagon.uuid)).toMatchObject({ ok: false });
+    expect(await caravan.setTeam(wagon.uuid, npc.uuid, true)).toMatchObject({ ok: false });
+    expect(await caravan.setDriver(wagon.uuid, npc.uuid)).toMatchObject({ ok: false });
+    const c = caravan.get();
+    expect(caravan.traveller(pc.uuid)!.seat).toBe(wagon.uuid);
+    expect(c.vehicles[0].team).toEqual([horse.uuid]);
+    expect(c.vehicles[0].driver).toBeNull();
+    expect(caravan.traveller(npc.uuid)!.seat).toBeNull();
+  });
+
+  it("a player can't take or clear a driver slot held by someone else's actor", async () => {
+    ok(await caravan.setDriver(wagon.uuid, npc.uuid));
+    asPlayer();
+    expect(await caravan.setDriver(wagon.uuid, pc.uuid)).toMatchObject({ ok: false });
+    expect(await caravan.setDriver(wagon.uuid, null)).toMatchObject({ ok: false });
+    expect(caravan.get().vehicles[0].driver).toBe(npc.uuid);
+  });
+
+  it("an actor is in at most one of a seat, a driver slot and a team", async () => {
+    ok(await caravan.setSeat(pc.uuid, wagon.uuid));
+    ok(await caravan.setDriver(wagon.uuid, pc.uuid));
+    expect(caravan.traveller(pc.uuid)!.seat).toBeNull();
+    ok(await caravan.setTeam(wagon.uuid, pc.uuid, true));
+    expect(caravan.get().vehicles[0]).toMatchObject({ driver: null, team: [pc.uuid] });
+    ok(await caravan.setSeat(pc.uuid, wagon.uuid));
+    expect(caravan.get().vehicles[0].team).toEqual([]);
+    expect(await caravan.setSeat(pc.uuid, "Actor.nope")).toMatchObject({ ok: false, code: "not-vehicle" });
+  });
+});
+
+describe("roles", () => {
+  beforeEach(async () => {
+    for (const a of [wagon, pc, horse, npc]) ok(await caravan.add(a.uuid));
+  });
+
+  it("are sticky, at most two per actor counting driving", async () => {
+    ok(await caravan.setRole("navigator", npc.uuid));
+    ok(await caravan.setDriver(wagon.uuid, npc.uuid));
+    expect(await caravan.setRole("scout", npc.uuid)).toMatchObject({ ok: false, code: "too-many-roles" });
+    ok(await caravan.setRole("navigator", npc.uuid)); // re-setting a held role is fine
+    ok(await caravan.setDriver(wagon.uuid, null));
+    ok(await caravan.setRole("scout", npc.uuid));
+    expect(await caravan.setDriver(wagon.uuid, npc.uuid)).toMatchObject({ ok: false, code: "too-many-roles" });
+    expect(caravan.get().roles).toMatchObject({ navigator: npc.uuid, scout: npc.uuid });
+  });
+
+  it("a player sets roles for their own actor, never over someone else's holder", async () => {
+    ok(await caravan.setRole("scout", npc.uuid));
+    asPlayer();
+    ok(await caravan.setRole("navigator", pc.uuid));
+    expect(await caravan.setRole("scout", pc.uuid)).toMatchObject({ ok: false });
+    expect(await caravan.setRole("forager", npc.uuid)).toMatchObject({ ok: false });
+    ok(await caravan.setRole("navigator", null)); // releasing their own
+    expect(caravan.get().roles).toMatchObject({ scout: npc.uuid, navigator: null });
+  });
+});
+
+describe("party funds", () => {
+  it("a player deposits 5 gp and withdraws it; the GM is whispered each time", async () => {
+    asPlayer();
+    const before = world.messages.length;
+    expect(ok(await caravan.deposit(pc.uuid, { pp: 0, gp: 5, sp: 0, cp: 0 })).caravan.funds).toBe(500);
+    expect(pc.system.currency).toMatchObject({ gp: 5, sp: 3 });
+    expect(ok(await caravan.withdraw(pc.uuid, { pp: 0, gp: 5, sp: 0, cp: 0 })).caravan.funds).toBe(0);
+    expect(pc.system.currency).toMatchObject({ gp: 10 });
+    expect(world.messages.length).toBe(before + 2);
+    expect(world.messages.slice(-2).every((m) => m.whisper?.includes(world.gm.user.id))).toBe(true);
+  });
+
+  it("refuses coins the character lacks, overdrawing the funds, and someone else's character", async () => {
+    expect(await caravan.deposit(pc.uuid, { pp: 1, gp: 0, sp: 0, cp: 0 })).toMatchObject({ ok: false, code: "insufficient-funds" });
+    expect(await caravan.withdraw(pc.uuid, { pp: 0, gp: 1, sp: 0, cp: 0 })).toMatchObject({ ok: false, code: "insufficient-funds" });
+    expect(await caravan.deposit(pc.uuid, { pp: 0, gp: -1, sp: 0, cp: 0 })).toMatchObject({ ok: false, code: "bad-value" });
+    asPlayer();
+    expect(await caravan.deposit(npc.uuid, { pp: 0, gp: 1, sp: 0, cp: 0 })).toMatchObject({ ok: false });
+    expect(pc.system.currency.gp).toBe(10);
+    expect(caravan.get().funds).toBe(0);
+  });
+});
+
+describe("GM numbers", () => {
+  it("updates a traveller's wage and a vehicle's numbers, validating values", async () => {
+    for (const a of [wagon, npc]) ok(await caravan.add(a.uuid));
+    expect(ok(await caravan.updateTraveller(npc.uuid, { wage: 30 })).caravan.travellers[0].wage).toBe(30);
+    expect(await caravan.updateTraveller(npc.uuid, { food: -1 })).toMatchObject({ ok: false, code: "bad-value" });
+    expect(ok(await caravan.updateVehicle(wagon.uuid, { seats: 6 })).caravan.vehicles[0].seats).toBe(6);
+    asPlayer();
+    expect(await caravan.updateTraveller(npc.uuid, { wage: 0 })).toMatchObject({ ok: false, code: "gm-only" });
   });
 });

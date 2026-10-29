@@ -5,23 +5,21 @@ import {
   extendPath,
   formatDcMods,
   parseDcMods,
-  parseEffects,
-  parsePrompts,
   polylineMidpoint,
   starPoints,
 } from "../../src/canvas/helpers";
-import { TERRAINS, terrainFill } from "../../src/canvas/terrain";
-import type { MapData } from "../../src/types";
+import { TERRAINS, terrainFill, terrainLabel } from "../../src/canvas/terrain";
+import { TERRAIN_KEYS, type MapData } from "../../src/types";
 
 const empty = (): MapData => ({ hexes: {}, regions: {}, landmarks: {}, routes: {} });
-const fallback = { terrain: "plains", difficulty: "easy" as const };
+const fallback = { terrain: "plains" as const };
 
 describe("applyBrush", () => {
   it("paints terrain without mutating the input", () => {
     const map = empty();
-    const next = applyBrush(map, ["0,0", "0,1"], { kind: "terrain", terrain: "desert", difficulty: "hard" }, fallback);
+    const next = applyBrush(map, ["0,0", "0,1"], { kind: "terrain", terrain: "desert-sandy" }, fallback);
     expect(map.hexes).toEqual({});
-    expect(next.hexes["0,1"]).toEqual({ key: "0,1", terrain: "desert", difficulty: "hard", region: null, tags: [] });
+    expect(next.hexes["0,1"]).toEqual({ key: "0,1", terrain: "desert-sandy", region: null, tags: [] });
   });
 
   it("assigns regions, toggles tags and erases", () => {
@@ -67,21 +65,6 @@ describe("DC mods", () => {
   });
 });
 
-describe("route JSON validation", () => {
-  it("accepts valid effects and prompts", () => {
-    expect(parseEffects('[{"type":"replenish","track":"either","amount":3},{"type":"setMapState","state":"mapped"}]')).toHaveLength(2);
-    expect(parsePrompts('[{"when":{"kind":"day","day":2},"text":"Storm"}]')).toHaveLength(1);
-    expect(parseEffects("")).toEqual([]);
-  });
-
-  it("rejects bad JSON and bad shapes", () => {
-    expect(() => parseEffects("{")).toThrow(/invalid JSON/);
-    expect(() => parseEffects("{}")).toThrow(/array/);
-    expect(() => parseEffects('[{"type":"extraDrain","track":"gold","perDay":1}]')).toThrow();
-    expect(() => parsePrompts('[{"when":{"kind":"day","day":0},"text":"x"}]')).toThrow();
-  });
-});
-
 describe("drawing geometry", () => {
   it("parses colours", () => {
     expect(colorToNumber("#ff0000")).toBe(0xff0000);
@@ -99,7 +82,9 @@ describe("drawing geometry", () => {
   });
 
   it("has a palette with a fallback fill", () => {
-    expect(TERRAINS.desert.difficulty).toBe("hard");
+    expect(Object.keys(TERRAINS).sort()).toEqual([...TERRAIN_KEYS].sort());
+    expect(terrainLabel("desert-sandy")).toBe("Desert (sandy)");
+    expect(TERRAIN_KEYS.every((k) => /^#[0-9a-f]{6}$/.test(terrainFill(k)))).toBe(true);
     expect(terrainFill("salt flat")).toBe("#bbbbbb");
   });
 });

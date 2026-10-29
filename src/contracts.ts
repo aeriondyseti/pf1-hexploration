@@ -2,29 +2,24 @@
 // `satisfies` its interface, so parallel work stays compatible. Foundry objects are
 // typed `any` (no Foundry type package); domain data uses src/types.ts.
 import type {
-  Assignment,
   CaravanResult,
   CaravanSettings,
   CaravanState,
-  Change,
+  Coins,
+  DayContext,
+  DayOutcome,
+  DayPreview,
   HexKey,
-  HexRecord,
   KnowledgeState,
-  LedgerEntry,
-  LegOutcome,
-  LegPlan,
   MapData,
-  MemberOpts,
-  MemberPatch,
-  Pack,
+  Pace,
   PartyMap,
-  Region,
   Request,
   RequestResult,
-  RoleDef,
-  RoleRoll,
-  RosterMember,
+  RoleId,
   SupplyTrack,
+  Traveller,
+  VehicleLink,
 } from "./types";
 
 // ---------- Engine (src/engine/, pure: invariant 3) ----------
@@ -32,43 +27,21 @@ import type {
 export interface Roller {
   /** An integer in [1, 20]. */
   d20(): number;
-}
-
-export interface ResolveLegInput {
-  plan: LegPlan;
-  roles: RoleDef[];
-  assignments: Assignment[];
-  rolls: RoleRoll[];
-  roster: RosterMember[];
-  hexes: Record<HexKey, HexRecord>;
-  regions: Record<string, Region>;
-  settings: CaravanSettings;
-  consecutiveForcedMarch: number; // carried in from earlier legs
+  /** An integer in [1, sides]. */
+  die(sides: number): number;
 }
 
 export interface EngineApi {
-  DEFAULT_ROLES: RoleDef[];
-  DEFAULT_SETTINGS: CaravanSettings;
-  /** Daily person-days of food and water for the roster. */
-  consumption(roster: RosterMember[]): { food: number; water: number };
-  /** Number of roster members who eat (food > 0): the Forager formula's "eaters". */
-  eaters(roster: RosterMember[]): number;
-  /** DC for one role on this leg, before any doubling penalty (doubling lowers the roll, not the DC). */
-  roleDc(role: RoleDef, plan: LegPlan, regions: Record<string, Region>, roster: RosterMember[]): number;
-  /** Roles an actor holds in the assignments (for doubling detection). */
-  rolesHeldBy(actorUuid: string, assignments: Assignment[]): string[];
-  /** Penalty applied to each roll of this actor (0, or settings.doublingPenalty when holding 2+ roles). */
-  doublingPenalty(actorUuid: string, assignments: Assignment[], settings: CaravanSettings): number;
-  /** Resolve a mustered leg: role outcomes, total days, the day-by-day plan. Deterministic. */
-  resolveLeg(input: ResolveLegInput): LegOutcome;
-  /** The map as the rules see it: hexes outside any region join a synthetic MAP_REGION_ID region built from map.rules. */
-  effectiveMap(map: MapData): MapData;
-  /** Leg plan from a named route in the map. */
-  planFromRoute(map: MapData, routeId: string): LegPlan;
-  /** Leg plan for an off-route path: DC from the hardest hex, region of the hardest hex. */
-  planFromPath(map: MapData, from: HexKey, path: HexKey[]): LegPlan;
-  /** The encounter check total for a day: d20 + journeyDay + bonus. */
-  encounterTotal(roller: Roller, journeyDay: number, bonus: number): { d20: number; total: number };
+  /** The map as the rules see it: hexes outside any region use map.rules (default: no table, ×1, no DC mods). */
+  rulesFor(map: MapData, hex: HexKey): import("./types").TravelRules;
+  /** The caravan's pace today (slowest moving vehicle or walker; broken, overload, blocked). */
+  pace(ctx: DayContext): Pace;
+  /** What today will need: whether it moves, the hexes it would enter, and every check with its DC. */
+  dayPreview(ctx: DayContext): DayPreview;
+  /** Resolve the day from the rolled totals (raw d20 + skill, keyed by CheckSpec.id; null = no readable roll). */
+  resolveDay(ctx: DayContext, totals: Record<string, number | null>, roller: Roller): DayOutcome;
+  /** UC exploration time for a hex at a pace (DESIGN §4.10). */
+  exploreDaysNeeded(map: MapData, hex: HexKey, milesPerDay: number): number;
   /** Are two hexes adjacent on a Foundry hex grid? (offset coords, `columns` = column-based hex grid, `even` = even offset). */
   hexAdjacent(a: HexKey, b: HexKey, columns: boolean, even: boolean): boolean;
   /** Seeded roller for tests and reproducible play (mulberry32). */
@@ -78,44 +51,49 @@ export interface EngineApi {
 // ---------- Store (src/store/) ----------
 
 export interface SupplyItem {
-  item: any; // pf1 Item in the caravan actor's inventory
+  item: any; // pf1 Item in a linked vehicle's inventory
   track: SupplyTrack;
   unitsPerQuantity: number; // flag; default 1 person-day per quantity
   /** The pf1 container holding the item, or null for a loose item. Drain uses loose items first. */
   container: any | null;
+  vehicleUuid: string;
+}
+
+export interface RepairItem {
+  item: any;
+  container: any | null;
+  vehicleUuid: string;
+  unitValue: number; // cp per unit (pf1 price × 100)
 }
 
 export interface StoreApi {
-  /** Register world settings (call in init). */
   registerSettings(): void;
-  /** The caravan: the designated `pf1-hexploration.caravan` actor (world setting `caravanActor`), else the world's first actor of that type. Its inventory is the hold; its token is the map marker. */
+  /** The designated caravan actor (world setting `caravanActor`), else the world's first caravan actor. */
   getCaravanActor(): any | null;
   setCaravanActor(uuid: string | null): Promise<void>;
-  getCaravan(): CaravanState; // defaults when unset
-  setCaravan(next: CaravanState): Promise<void>; // GM only (throws otherwise)
+  getCaravan(): CaravanState; // defaults when unset; migrates 0.1.x state
+  setCaravan(next: CaravanState): Promise<void>; // GM only
   getSettings(): CaravanSettings;
-  getRoles(): RoleDef[];
-  setRoles(roles: RoleDef[]): Promise<void>;
-  /** GM truth for a scene (default: canvas scene). */
+  /** GM truth for a scene (default: canvas scene), migrated to the current format. */
   getMap(sceneId?: string): MapData;
   setMap(map: MapData, sceneId?: string): Promise<void>; // GM only
   getPartyMap(sceneId?: string): PartyMap;
+  setPartyMap(sceneId: string, party: PartyMap): Promise<void>; // GM only (undo)
   setKnowledge(sceneId: string, keys: HexKey[], state: KnowledgeState): Promise<void>; // GM only
-  /** Map filtered to what the party knows: explored/mapped hexes, known routes/landmarks. Use for every player-facing render. */
+  /** Map filtered to what the party knows. Use for every player-facing render (invariant 1). */
   partyView(sceneId?: string): MapData;
-  /** Loose supply items first, then items inside containers (a container flagged as a supply makes all its contents count). */
+  /** Supply items in the linked vehicles' inventories: loose first, then inside containers. */
   supplyItems(): SupplyItem[];
-  /** GM: set a supply item's quantity (whole numbers only: pf1 zeroes non-integers), loose or inside a container. Returns the ledger change. */
-  setSupplyQuantity(supply: SupplyItem, quantity: number): Promise<Change>;
+  /** GM: set a supply item's quantity (whole numbers). */
+  setSupplyQuantity(supply: SupplyItem, quantity: number): Promise<void>;
   supplyTotals(): { rations: number; water: number };
-  /** Subscribe to any change in caravan, map, knowledge or supplies. Returns an unsubscribe fn. */
+  /** Repair materials in the linked vehicles: items flagged `supply: repair` or named "Repair Materials" (containers
+   *  flagged repair count their contents). unitValue = the pf1 price per unit, in cp. */
+  repairItems(): RepairItem[];
+  /** Total value of repair materials, cp. */
+  repairValue(): number;
   onChange(cb: () => void): () => void;
-  /** Emit a change notification (called by writers after a write). */
   notify(): void;
-  /** GM: load a pack's roles/settings into the world and its map into the scene (replacing the scene's map). */
-  importPack(pack: Pack, sceneId?: string): Promise<void>;
-  /** Current roles/settings and the scene's map as a pack. */
-  exportPack(name: string, sceneId?: string): Pack;
 }
 
 // ---------- Authority (src/authority/, invariant 2) ----------
@@ -123,42 +101,57 @@ export interface StoreApi {
 export type RequestHandler = (request: Request, userId: string) => Promise<RequestResult>;
 
 export interface AuthorityApi {
-  init(): void; // register the socket listener (call in ready)
+  init(): void;
   /** GM: run locally. Player: emit to the active GM and await the reply (timeout -> {ok:false}). */
   send(request: Request): Promise<RequestResult>;
   registerHandler(type: Request["type"], handler: RequestHandler): void;
   isActiveGM(): boolean;
 }
 
-// ---------- Ledger (src/ledger/, invariant 4) ----------
+// ---------- Undo (src/ledger/, invariant 4: the last day step) ----------
 
-export interface LedgerApi {
-  /** Record changes that were just applied (GM only). Stored on the caravan actor. */
-  record(label: string, changes: Change[]): Promise<LedgerEntry>;
-  /** Revert the most recent entry, newest change first, and drop it. */
-  undoLast(): Promise<LedgerEntry | null>;
-  entries(): LedgerEntry[];
+export interface UndoApi {
+  /** GM: capture everything the coming day step can change. Replaces the previous snapshot. */
+  capture(label: string): Promise<void>;
+  /** GM: restore the last snapshot, once. Returns its label, or null when there is nothing to undo. */
+  undo(): Promise<string | null>;
+  /** Label of the day that can be undone, or null. */
+  available(): string | null;
+  /** GM: note the world time the day advanced and party funds after it, so undo can rewind both. */
+  recordTime(seconds: number, fundsAfter: number): Promise<void>;
 }
 
 // ---------- pf1 adapter (src/pf1/) ----------
 
 export interface Pf1Api {
-  /** PF1e gear-weight size multiplier (DESIGN §4.6): tiny- 0.1, sm 0.5, med 1, lg 2, huge 5, grg 8, col 12. */
+  /** PF1e gear-weight size multiplier: tiny- 0.1, sm 0.5, med 1, lg 2, huge 5, grg 8, col 12. */
   sizeMultiplier(actor: any): number;
+  /** pf1 size key ("med", "lg", …). */
+  sizeKey(actor: any): string;
   /** Default food/water per day for an actor: size multiplier, 0 for constructs and undead. */
   consumptionFor(actor: any): { food: number; water: number };
-  /** Build a roster member from an actor (defaults from size/type; npc = no player owner). */
-  rosterMemberFor(actor: any, draft?: boolean): RosterMember;
-  /** The allowed skill with the highest modifier for this actor. */
+  travellerFor(actor: any): Traveller;
+  vehicleFor(actor: any): VehicleLink;
+  isVehicle(actor: any): boolean;
+  /** Land speed in feet, after pf1's own encumbrance. */
+  landSpeed(actor: any): number;
+  /** Body weight by size plus carried load, lb (riders beyond the seats count as cargo). */
+  riderWeight(actor: any): number;
+  /** Total weight of an actor's inventory, lb. */
+  inventoryWeight(actor: any): number;
+  /** Team strength in Large equivalents (Small 0.25, Medium 0.5, Large 1, Huge 2, Gargantuan 4, Colossal 8). */
+  pullStrength(actor: any): number;
+  vehicleHp(actor: any): { hp: number; maxHp: number };
+  setVehicleHp(actor: any, hp: number): Promise<void>;
+  coins(actor: any): Coins;
+  setCoins(actor: any, coins: Coins): Promise<void>;
   bestSkill(actor: any, skills: string[]): string;
+  skillMod(actor: any, skillId: string): number;
   skillLabel(skillId: string): string;
-  /** Roll a pf1 skill on this client (posts the pf1 chat card); returns the total or null if cancelled. */
-  rollSkill(actor: any, skillId: string, penalty: number, flavor: string): Promise<number | null>;
-  /** Roll a Fortitude save; returns the total or null. */
-  rollFort(actor: any, flavor: string): Promise<number | null>;
-  hasCondition(actor: any, condition: string): boolean;
-  setCondition(actor: any, condition: string, on: boolean): Promise<void>;
-  /** Users (non-GM) who own this actor. */
+  /** Roll a pf1 skill with no dialog; returns the d20 + skill total (penalty applied), or null. */
+  rollSkill(actor: any, skillId: string, penalty: number): Promise<number | null>;
+  /** Status labels for the Caravan sheet (pf1 conditions such as Fatigued). */
+  conditions(actor: any): string[];
   playerOwners(actor: any): string[];
 }
 
@@ -166,60 +159,61 @@ export interface Pf1Api {
 
 export interface TravelApi {
   init(): void; // register authority handlers (call in ready)
-  /** GM: open a muster for a leg. */
-  startLeg(plan: LegPlan): Promise<void>;
-  cancelLeg(): Promise<void>;
-  /** GM: resolve rolls into an outcome; whisper due prompts; status -> underway. */
-  resolveMuster(): Promise<void>;
-  /** GM: advance one day (token, drain, saves, conditions, encounter, world time, ledger). */
-  nextDay(): Promise<void>;
-  /** GM: finish the leg after the last day (map state, replenish, arrival prompts). */
-  arrive(): Promise<void>;
+  /** Anyone: change the shared plan (a request; the GM applies it). */
+  setPlan(plan: { activity: import("./types").Activity; course: HexKey[]; routeId: string | null }, text: string): Promise<RequestResult>;
+  /** GM: approve the plan and start the trip. */
+  approve(): Promise<void>;
+  /** GM: run one day. Returns the outcome, or null when nothing ran. */
+  nextDay(): Promise<DayOutcome | null>;
+  /** GM: run days until the trip ends, an encounter turns up, or the caravan can't move. */
+  travelAll(): Promise<void>;
+  /** GM: end the trip where the caravan is. */
+  stop(): Promise<void>;
+  /** GM: undo the last day. */
   undo(): Promise<void>;
-  /** Player or GM: roll this actor's role from the owning client and submit it. */
-  rollRole(roleId: string, actorUuid: string): Promise<void>;
-  /** Player or GM: roll an owed save and submit it. */
-  rollSave(actorUuid: string, day: number): Promise<void>;
+  /** Today's preview for the Travel window (any client; players get a party-safe one). */
+  preview(): DayPreview | null;
 }
 
 // ---------- Caravan service (src/caravan/, exposed as hx.caravan) ----------
 
-/** Placement and roster edits with typed results. The Caravan window uses these same functions. */
 export interface CaravanApi {
-  // Reading (sync, any client)
+  init(): void; // register authority handlers (call in ready)
   get(): CaravanState;
-  member(actorUuid: string): RosterMember | null;
-  /** Case-insensitive, exact (trimmed) name match. */
-  findMember(name: string): RosterMember | null;
-  // Placement (GM, one ledger entry each). Refused while a leg is mustering or underway.
+  traveller(actorUuid: string): Traveller | null;
+  vehicle(actorUuid: string): VehicleLink | null;
+  /** Placement (GM). */
   place(hex: HexKey, sceneId?: string): Promise<CaravanResult>;
   unplace(sceneId?: string): Promise<CaravanResult>;
-  // Roster (GM, one ledger entry each)
-  add(actorUuid: string, opts?: MemberOpts): Promise<CaravanResult>;
+  // Edits: on the GM they apply at once; on a player they go as a request. Players act only on actors they own.
+  add(actorUuid: string): Promise<CaravanResult>;
   remove(actorUuid: string): Promise<CaravanResult>;
-  update(actorUuid: string, patch: MemberPatch): Promise<CaravanResult>;
-  setDraftRequired(n: number): Promise<CaravanResult>;
+  setSeat(actorUuid: string, vehicleUuid: string | null): Promise<CaravanResult>;
+  setDriver(vehicleUuid: string, actorUuid: string | null): Promise<CaravanResult>;
+  setTeam(vehicleUuid: string, actorUuid: string, on: boolean): Promise<CaravanResult>;
+  setRole(roleId: RoleId, actorUuid: string | null): Promise<CaravanResult>;
+  deposit(actorUuid: string, coins: Coins): Promise<CaravanResult>;
+  withdraw(actorUuid: string, coins: Coins): Promise<CaravanResult>;
+  /** GM: edit a traveller's numbers (food, water, wage) or a vehicle's (seats, capacity, team, pace). */
+  updateTraveller(actorUuid: string, patch: Partial<Pick<Traveller, "food" | "water" | "wage">>): Promise<CaravanResult>;
+  updateVehicle(actorUuid: string, patch: Partial<Pick<VehicleLink, "seats" | "cargoCapacity" | "teamRequired" | "milesPerDay">>): Promise<CaravanResult>;
 }
 
 // ---------- Canvas & UI ----------
 
 export interface CanvasApi {
-  /** Hooks: canvasReady drawing, scene controls group, store change redraw. Call in init. */
   register(): void;
   openPainter(): void;
   redraw(): void;
-  /** The off-route path most recently plotted with the painter's Path tool on this client (GM), or null. */
-  getPlottedPath(): { from: HexKey; path: HexKey[] } | null;
-  /** This user's view switches (what the hex layer draws). */
+  /** Start plotting a course on the canvas (any user): click a destination, shift-click waypoints. */
+  plotCourse(): void;
   getView(): import("./canvas/view").ViewOptions;
-  /** Change some view switches for this user; the layer redraws. */
   setView(patch: Partial<import("./canvas/view").ViewOptions>): Promise<import("./canvas/view").ViewOptions>;
-  /** Open the Hex View panel. */
   openViewPanel(): void;
 }
 
 export interface UiApi {
-  register(): void; // call in init (templates, hooks)
-  openTravel(): void; // the Muster/Travel window (all users; GM sees controls)
-  openCaravan(): void; // the Caravan sheet window (roster, hold, tracks)
+  register(): void;
+  openTravel(): void;
+  openCaravan(): void;
 }

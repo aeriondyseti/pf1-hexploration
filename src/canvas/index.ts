@@ -3,7 +3,8 @@ import type { CanvasApi } from "../contracts";
 import { store } from "../store";
 import { hexUi } from "../ui";
 import { drawLayer, teardownLayer } from "./layer";
-import { closePainter, getPlottedPath, openPainter } from "./painter";
+import { closePainter, openPainter } from "./painter";
+import { plotCourse, registerCourse } from "./course";
 import { attachTooltip, detachTooltip, registerTooltipSetting } from "./tooltip";
 import { getView, onViewChange, registerViewSetting, setView } from "./view";
 import { openViewPanel } from "./view-panel";
@@ -25,6 +26,7 @@ function scheduleRedraw(): void {
 export const hexCanvas = {
   register() {
     registerTooltipSetting();
+    registerCourse();
     registerViewSetting();
     onViewChange(scheduleRedraw);
     Hooks.on("canvasReady", () => {
@@ -86,7 +88,7 @@ export const hexCanvas = {
   },
   openPainter,
   redraw: drawLayer,
-  getPlottedPath,
+  plotCourse,
   getView,
   setView,
   openViewPanel,

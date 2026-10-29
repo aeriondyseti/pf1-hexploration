@@ -2,7 +2,7 @@
   "id": "pf1-hexploration",
   "title": "PF1 Hexploration",
   "description": "Caravan-role hexploration for Pathfinder 1e: paint a hex map and routes, muster caravan roles per leg, and step travel day by day with drain, conditions, encounters, map knowledge and undo.",
-  "version": "0.1.14",
+  "version": "0.2.5",
   "authors": [
     {
       "name": "Aerion Dyseti"
@@ -27,12 +27,13 @@
     "main.js"
   ],
   "styles": [
-    "styles/pf1-hexploration.css"
+    "styles/pf1-hexploration.css",
+    "styles/travel.css"
   ],
   "socket": true,
   "url": "https://github.com/aeriondyseti/pf1-hexploration",
   "manifest": "https://github.com/aeriondyseti/pf1-hexploration/releases/latest/download/module.json",
-  "download": "https://github.com/aeriondyseti/pf1-hexploration/releases/download/v0.1.14/module.zip",
+  "download": "https://github.com/aeriondyseti/pf1-hexploration/releases/download/v0.2.5/module.zip",
   "bugs": "https://github.com/aeriondyseti/pf1-hexploration/issues",
   "license": "MIT",
   "documentTypes": {

@@ -1,10 +1,10 @@
 // Domain types shared by every layer. The engine (src/engine/) uses only these and
-// plain values — never Foundry objects (invariant 3).
+// plain values — never Foundry objects (invariant 3). DESIGN.md (MVP rework, ADR-0008) is the spec.
 
 export const MODULE_ID = "pf1-hexploration";
-/** The Caravan actor subtype (DESIGN §4.6). */
+/** The Caravan actor subtype (DESIGN §4.4). */
 export const CARAVAN_TYPE = `${MODULE_ID}.caravan`;
-/** Prototype-token settings for a caravan (also applied by the Caravan window's "Place on map"). */
+/** Prototype-token settings for a caravan (also applied by "Place on map"). */
 export const CARAVAN_TOKEN = {
   actorLink: true,
   bar1: { attribute: null },
@@ -16,58 +16,92 @@ export const CARAVAN_TOKEN = {
 /** Foundry v13 offset coordinates of a hex, as `${i},${j}` (i = row, j = column). */
 export type HexKey = string;
 
-export type Difficulty = "easy" | "standard" | "hard" | "brutal";
-export const DIFFICULTIES: Difficulty[] = ["easy", "standard", "hard", "brutal"];
-
-/** Wagon Condition lost per day by difficulty (KtP: Easy 0, Standard 1, Hard 2, Brutal 3). */
-export const WAGON_DRAIN: Record<Difficulty, number> = { easy: 0, standard: 1, hard: 2, brutal: 3 };
-/** Encounter bonus by difficulty (KtP: +0 / +2 / +5 / +10). */
-export const ENCOUNTER_BONUS: Record<Difficulty, number> = { easy: 0, standard: 2, hard: 5, brutal: 10 };
-
 export type KnowledgeState = "unknown" | "explored" | "mapped";
 export type SupplyTrack = "rations" | "water";
-export type Track = SupplyTrack | "wagon";
 
-/** Built-in Ultimate Campaign terrain elements (DESIGN §4.2). Custom tags are any other string. */
+// ---------- Terrain (DESIGN §4.2) ----------
+
+export type Terrain =
+  | "desert-sandy"
+  | "desert-rocky"
+  | "forest"
+  | "hills"
+  | "jungle"
+  | "moor"
+  | "mountains"
+  | "plains"
+  | "swamp"
+  | "tundra"
+  | "settlement"
+  | "water";
+
+/** UC exploration-time classes (Ultimate Campaign, Exploration Time table). */
+export type ExploreClass = "plain" | "desert" | "mountain";
+
+export interface TerrainRule {
+  label: string;
+  /** CRB Table 7-8 multipliers. */
+  highway: number;
+  road: number;
+  trackless: number;
+  /** CRB getting-lost Survival DC (before the daily +4). null = impassable. */
+  lostDc: number | null;
+  /** Wear die size off-road (d4/d6/d8). 0 = impassable. */
+  wearDie: number;
+  explore: ExploreClass;
+  passable: boolean;
+}
+
+export const TERRAIN_RULES: Record<Terrain, TerrainRule> = {
+  "desert-sandy": { label: "Desert (sandy)", highway: 1, road: 0.5, trackless: 0.5, lostDc: 14, wearDie: 6, explore: "desert", passable: true },
+  "desert-rocky": { label: "Desert (rocky)", highway: 1, road: 1, trackless: 0.75, lostDc: 14, wearDie: 4, explore: "desert", passable: true },
+  forest: { label: "Forest", highway: 1, road: 1, trackless: 0.5, lostDc: 16, wearDie: 6, explore: "desert", passable: true },
+  hills: { label: "Hills", highway: 1, road: 0.75, trackless: 0.5, lostDc: 10, wearDie: 6, explore: "plain", passable: true },
+  jungle: { label: "Jungle", highway: 1, road: 0.75, trackless: 0.25, lostDc: 16, wearDie: 8, explore: "desert", passable: true },
+  moor: { label: "Moor", highway: 1, road: 1, trackless: 0.75, lostDc: 10, wearDie: 4, explore: "desert", passable: true },
+  mountains: { label: "Mountains", highway: 0.75, road: 0.75, trackless: 0.5, lostDc: 12, wearDie: 6, explore: "mountain", passable: true },
+  plains: { label: "Plains", highway: 1, road: 1, trackless: 0.75, lostDc: 14, wearDie: 4, explore: "plain", passable: true },
+  swamp: { label: "Swamp", highway: 1, road: 0.75, trackless: 0.5, lostDc: 16, wearDie: 6, explore: "desert", passable: true },
+  tundra: { label: "Tundra", highway: 1, road: 0.75, trackless: 0.75, lostDc: 14, wearDie: 4, explore: "plain", passable: true },
+  settlement: { label: "Settlement", highway: 1, road: 1, trackless: 1, lostDc: 8, wearDie: 4, explore: "plain", passable: true },
+  water: { label: "Water", highway: 0, road: 0, trackless: 0, lostDc: null, wearDie: 0, explore: "plain", passable: false },
+};
+
+export const TERRAIN_KEYS = Object.keys(TERRAIN_RULES) as Terrain[];
+
+/** Ultimate Campaign terrain elements (DESIGN §4.2): the only hex tags. */
 export const UC_TAGS = ["difficult", "feature", "hunting-ground", "resource", "secret", "standard"] as const;
+export type UcTag = (typeof UC_TAGS)[number];
 
-/** Values stamped onto a hex when it is created: by a region (Region.defaults) or by the map for region-less hexes. */
+// ---------- Map ----------
+
+/** Values stamped onto a hex when it is painted (by a region, or the map for region-less hexes). */
 export interface HexDefaults {
-  terrain: string;
-  difficulty: Difficulty;
-  tags: string[];
-  encounterMod: number;
+  terrain: Terrain;
+  tags: UcTag[];
 }
 
-/** Travel rules for hexes outside any region: the same rules a Region carries. */
-export interface MapRules {
+/** Travel rules a region carries; the map has the same set for region-less hexes. */
+export interface TravelRules {
+  encounterTable: string | null; // RollTable UUID
+  /** roleId -> DC modifier; key "*" applies to every role (e.g. Stormlands +5). Driver roles use "driver". */
   dcMods: Record<string, number>;
-  encounterTable: string | null;
-  waterMultiplier: number;
-  stormThreshold: number | null;
+  rationsMultiplier: number; // 1 normally
+  waterMultiplier: number; // 1 normally; a desert ×2
 }
-
-/** Synthetic region id the engine uses for hexes outside any region (built from MapData.rules). */
-export const MAP_REGION_ID = "__map__";
 
 export interface HexRecord {
   key: HexKey;
-  terrain: string; // free label, e.g. "desert", "dunes", "salt flat"
-  difficulty: Difficulty;
+  terrain: Terrain;
   region: string | null; // Region.id
-  tags: string[]; // UC_TAGS and custom tags
-  encounterMod?: number; // added to this hex's daily encounter roll (default 0)
+  tags: UcTag[];
 }
 
-export interface Region {
+export interface Region extends TravelRules {
   id: string;
   name: string;
-  color: string; // CSS colour used to tint the region's hexes
-  encounterTable: string | null; // RollTable UUID
-  dcMods: Record<string, number>; // roleId -> DC modifier; key "*" applies to every role
-  waterMultiplier: number; // 1 normally; heat bands later
-  stormThreshold: number | null; // encounter total at/above which the GM is told the storm reaches for them
-  defaults?: HexDefaults; // stamped onto hexes painted into this region
+  color: string; // "#rrggbb" or "#rrggbbaa"
+  defaults?: HexDefaults;
 }
 
 export interface Landmark {
@@ -79,41 +113,17 @@ export interface Landmark {
   icon?: string; // Font Awesome name, e.g. "fa-tower-observation"; default "fa-location-dot"
 }
 
-export type RouteEffect =
-  | { type: "replenish"; track: SupplyTrack | "either"; amount: number } // once, on arrival
-  | { type: "extraDrain"; track: Track; perDay: number }
-  | { type: "dcMod"; roleId: string; mod: number }
-  | { type: "setMapState"; state: KnowledgeState }; // applied to the leg's hexes on arrival
+export type RouteKind = "highway" | "road";
 
-export type PromptTrigger =
-  | { kind: "roleSuccess"; roleId: string }
-  | { kind: "roleFailure"; roleId: string }
-  | { kind: "day"; day: number }; // 1-based day of the leg
-
-export interface GmPrompt {
-  when: PromptTrigger;
-  text: string;
-}
-
+/** A road: a named chain of adjacent hexes (DESIGN §4.2). */
 export interface Route {
   id: string;
   name: string;
-  /** Ordered hexes the caravan enters, NOT including the starting hex. Length = hexes travelled. */
-  hexes: HexKey[];
-  from: HexKey; // starting hex
-  days: number; // expected days (normally hexes.length)
-  difficulty: Difficulty;
-  encounterBonus: number;
-  bargain: string; // player-facing pitch
-  color?: string; // "#rrggbb" or "#rrggbbaa"; default brown
-  effects: RouteEffect[];
-  prompts: GmPrompt[];
+  from: HexKey; // first hex
+  hexes: HexKey[]; // the following hexes, in order (so the chain is [from, ...hexes])
+  kind: RouteKind;
+  color?: string; // default brown
   knownToParty: boolean;
-}
-
-/** A route's display label: its name, or a short description when it has none ("3-day easy route"). */
-export function routeLabel(route: Pick<Route, "name" | "days" | "difficulty">): string {
-  return route.name?.trim() || `${route.days}-day ${route.difficulty} route`;
 }
 
 /** GM truth for one scene: everything the map contains. */
@@ -123,213 +133,145 @@ export interface MapData {
   /** Stamped onto new hexes outside any region. */
   defaults?: HexDefaults;
   /** Travel rules for hexes outside any region. */
-  rules?: MapRules;
+  rules?: TravelRules;
   hexes: Record<HexKey, HexRecord>;
   regions: Record<string, Region>;
   landmarks: Record<string, Landmark>;
   routes: Record<string, Route>;
+  /** Data format; 2 = the MVP rework. Missing = 0.1.x (migrated on load). */
+  version?: number;
 }
 
 /** What the party knows about one scene's map. */
 export interface PartyMap {
   knowledge: Record<HexKey, KnowledgeState>;
+  /** Hexes explored to the end (Explore activity): their Secret element shows. */
+  revealed?: HexKey[];
 }
 
-// ---------- Roles ----------
+// ---------- Roles (DESIGN §4.5, §4.6) ----------
 
-export type RoleEffect =
-  | { type: "addDays"; days: number } // once per leg (Navigator/Driver failure)
-  | { type: "surprise"; surprised: boolean } // Scout
-  | { type: "preserveOne" } // Forager success: each day, choose rations OR water not to drain
-  | { type: "wagonPerDay"; delta: number } // Wainwright: +1 repair on success, -1 extra on failure
-  | { type: "setMapState"; state: KnowledgeState } // Cartographer
-  | { type: "rest" } // Healer success: no forced march
-  | { type: "forcedMarch" }; // Healer failure/vacant: daily Fort save
+export type RoleId = "navigator" | "scout" | "forager" | "wainwright" | "cartographer" | "healer";
+export const ROLE_IDS: RoleId[] = ["navigator", "scout", "forager", "wainwright", "cartographer", "healer"];
 
 export interface RoleDef {
-  id: string;
+  id: RoleId | "driver";
   name: string;
   skills: string[]; // pf1 skill ids: "sur", "per", "han", "kge", "kna", "hea", "pro", "crf"
-  baseDc: number;
-  /** "forager": DC = 10 + 2 * (eaters - 1) instead of baseDc. */
-  dcFormula: "fixed" | "forager";
-  success: RoleEffect[];
-  failure: RoleEffect[];
-  vacant: RoleEffect[]; // when nobody holds the role (usually = failure)
 }
 
-// ---------- Caravan ----------
+export const ROLE_DEFS: Record<RoleId | "driver", RoleDef> = {
+  navigator: { id: "navigator", name: "Navigator", skills: ["sur", "pro"] },
+  scout: { id: "scout", name: "Scout", skills: ["per", "pro"] },
+  forager: { id: "forager", name: "Forager", skills: ["sur", "kna", "pro"] },
+  driver: { id: "driver", name: "Driver", skills: ["han", "pro"] },
+  wainwright: { id: "wainwright", name: "Wainwright", skills: ["crf", "pro"] },
+  cartographer: { id: "cartographer", name: "Cartographer", skills: ["kge", "pro"] },
+  healer: { id: "healer", name: "Healer/Cook", skills: ["hea", "pro"] },
+};
 
-export interface RosterMember {
+/** A check slot for one day: a role id, or `driver:<vehicle actor uuid>`. */
+export type CheckId = string;
+
+// ---------- Caravan (DESIGN §4.4, §4.7) ----------
+
+export interface Traveller {
   actorUuid: string;
   name: string;
   food: number; // person-days eaten per day (size multiplier; 0 for constructs/undead)
   water: number; // person-days drunk per day
-  draft: boolean; // pulls the wagon
-  npc: boolean; // auto-rolls saves (GM-run, companion, animal)
+  wage: number; // copper pieces per day (0 for PCs)
+  seat: string | null; // vehicle actor UUID the traveller rides in, or null = on foot
 }
 
-export interface Assignment {
-  roleId: string;
+export interface VehicleLink {
   actorUuid: string;
+  name: string;
+  driver: string | null; // traveller actor UUID
+  team: string[]; // traveller actor UUIDs pulling it
+  /** Team needed, in Large-creature equivalents (UE: 2 Medium = 1 Large). */
+  teamRequired: number;
+  seats: number;
+  cargoCapacity: number; // lb
+  milesPerDay: number; // overland pace (CRB carts and wagons: 16)
 }
 
-export interface RoleRoll {
-  roleId: string;
-  actorUuid: string;
-  total: number;
+export type Activity = "travel" | "explore" | "forage" | "rest";
+
+/** The party's shared plan; the GM approves it to start a trip (DESIGN §4.10). */
+export interface Plan {
+  activity: Activity;
+  /** Travel: hexes to enter, in order, starting next to the caravan's position. */
+  course: HexKey[];
+  routeId: string | null; // set when the course was picked from a known route
+  /** Who last changed it (user name) and what they did, for the Travel window. */
+  lastEdit: { user: string; text: string } | null;
 }
 
-export interface LegPlan {
-  routeId: string | null; // null = off-route plotted path
-  from: HexKey;
-  path: HexKey[]; // hexes entered, in order
-  baseDays: number;
-  difficulty: Difficulty;
-  encounterBonus: number;
-  effects: RouteEffect[];
-  prompts: GmPrompt[];
-  regionId: string | null; // region whose DC mods apply (the destination's, or the hardest hex's)
-}
-
-export interface RoleOutcome {
-  roleId: string;
-  actorUuid: string | null; // null = vacant
-  dc: number;
-  total: number | null;
-  success: boolean;
-  doubled: boolean;
-}
-
-export interface DayPlan {
-  day: number; // 1-based
-  hex: HexKey; // where the caravan ends the day
-  drain: { rations: number; water: number; wagon: number }; // positive = amount removed
-  encounterBonus: number;
-  regionId: string | null;
-  forcedMarchDc: number | null; // Fort DC owed by each traveler today, or null
-  preserveChoice: boolean; // Forager success: party picks rations or water to keep today
-  prompts: string[]; // GM prompt texts due today
-}
-
-export interface LegOutcome {
-  roles: RoleOutcome[];
-  totalDays: number;
-  surprised: boolean;
-  mapState: KnowledgeState; // applied to path hexes on arrival
-  days: DayPlan[];
-  arrivalPrompts: string[]; // role success/failure prompts
-  replenish: RouteEffect[]; // replenish effects applied on arrival
-}
-
-export type LegStatus = "muster" | "underway" | "arrived";
-
-export interface SaveOwed {
-  actorUuid: string;
-  dc: number;
-  day: number;
-  total: number | null; // filled when rolled
-}
-
-export interface LegState {
-  id: string;
-  status: LegStatus;
-  plan: LegPlan;
-  assignments: Assignment[];
-  rolls: RoleRoll[];
-  outcome: LegOutcome | null; // set when the GM resolves the muster
-  dayIndex: number; // days completed so far
-  saves: SaveOwed[];
-  preserveChoices: Record<number, SupplyTrack>; // day -> track preserved
+export interface Trip {
+  activity: Activity;
+  course: HexKey[]; // hexes still to enter (travel)
+  day: number; // days completed so far in this trip
+  exploreDays: number; // explore: days spent in this hex so far
 }
 
 export interface CaravanState {
-  roster: RosterMember[];
-  wagon: { condition: number; max: number };
-  draftRequired: number;
+  travellers: Traveller[];
+  vehicles: VehicleLink[];
+  /** Sticky role holders (actor UUIDs). Drivers live on each VehicleLink. */
+  roles: Partial<Record<RoleId, string | null>>;
+  funds: number; // party funds, copper pieces
   sceneId: string | null;
   position: HexKey | null;
-  journeyDay: number; // total travel days, feeds the encounter check
-  consecutiveForcedMarch: number;
-  leg: LegState | null;
+  journeyDay: number; // total days on the road, feeds nothing but the record
+  plan: Plan;
+  trip: Trip | null;
 }
 
 export interface CaravanSettings {
-  doublingPenalty: number; // applied to BOTH rolls of a doubled actor (default 4)
-  forcedMarchBaseDc: number; // default 10
-  forcedMarchStep: number; // +2 per consecutive day
+  doublingPenalty: number; // applied to BOTH rolls of an actor holding two roles (default 4)
 }
 
 // ---------- Caravan service results (hx.caravan) ----------
 
 export type CaravanErrorCode =
   | "gm-only" // not the GM's client
-  | "leg-active" // place/unplace while a leg is mustering or underway
-  | "not-hex-scene" // the scene's grid isn't hexagonal
-  | "off-grid" // the hex isn't on the scene (or the scene doesn't exist)
-  | "no-caravan-actor" // no caravan designated or created yet
-  | "unknown-actor" // the UUID doesn't resolve
-  | "caravan-actor" // tried to add a caravan-type actor
-  | "duplicate" // the actor is already on the roster
-  | "not-member" // remove/update an actor who isn't on the roster
-  | "holds-role" // remove someone holding a role in the active leg (the error names the role)
-  | "bad-value" // negative food/water, non-integer draft count, malformed hex key, ...
-  | "failed"; // Foundry threw while applying the change (the error says what)
+  | "not-owner" // a player acting on an actor they don't own
+  | "trip-active" // a change refused while a trip is underway
+  | "not-hex-scene"
+  | "off-grid"
+  | "no-caravan-actor"
+  | "unknown-actor"
+  | "caravan-actor"
+  | "duplicate"
+  | "not-member"
+  | "not-vehicle"
+  | "too-many-roles" // an actor would hold more than two roles
+  | "insufficient-funds"
+  | "bad-value"
+  | "failed";
 
-/** Every hx.caravan write returns one of these; `error` is the sentence a person would see. */
-export type CaravanResult =
-  | { ok: true; caravan: CaravanState; ledgerId: string }
-  | { ok: false; code: CaravanErrorCode; error: string };
+export type CaravanResult = { ok: true; caravan: CaravanState } | { ok: false; code: CaravanErrorCode; error: string };
 
-export interface MemberOpts {
-  draft?: boolean;
-  npc?: boolean;
-}
-
-export interface MemberPatch {
-  draft?: boolean;
-  npc?: boolean;
-  food?: number;
-  water?: number;
-}
-
-/** Importable content pack (campaign data lives outside the module repo, DESIGN §4.12). */
-export interface Pack {
-  format: "pf1-hexploration-pack";
-  version: 1;
-  name: string;
-  roles?: RoleDef[];
-  settings?: Partial<CaravanSettings>;
-  map?: MapData;
-}
-
-// ---------- Ledger (invariant 4) ----------
-
-export type Change =
-  /** containerUuid/itemId are set when the item sits inside a pf1 container (no resolvable UUID of its own). */
-  | { kind: "itemQuantity"; itemUuid: string; before: number; after: number; containerUuid?: string; itemId?: string }
-  | { kind: "condition"; actorUuid: string; condition: string; before: boolean; after: boolean }
-  | { kind: "knowledge"; sceneId: string; key: HexKey; before: KnowledgeState; after: KnowledgeState }
-  | { kind: "caravan"; before: CaravanState; after: CaravanState }
-  | { kind: "token"; tokenUuid: string; before: { x: number; y: number }; after: { x: number; y: number } }
-  | { kind: "worldTime"; seconds: number }
-  | { kind: "tokenCreate"; tokenUuid: string } // undo deletes the token
-  | { kind: "tokenDelete"; sceneId: string; data: Record<string, unknown> }; // undo recreates it
-
-export interface LedgerEntry {
-  id: string;
-  label: string;
-  changes: Change[];
+export interface Coins {
+  pp: number;
+  gp: number;
+  sp: number;
+  cp: number;
 }
 
 // ---------- Authority requests (invariant 2) ----------
 
 export type Request =
-  | { type: "claimRole"; roleId: string; actorUuid: string }
-  | { type: "releaseRole"; roleId: string; actorUuid: string }
-  | { type: "submitRoleRoll"; roleId: string; actorUuid: string; total: number }
-  | { type: "submitSave"; actorUuid: string; day: number; total: number }
-  | { type: "preserveChoice"; day: number; track: SupplyTrack };
+  | { type: "addActor"; actorUuid: string }
+  | { type: "removeActor"; actorUuid: string }
+  | { type: "setSeat"; actorUuid: string; vehicleUuid: string | null }
+  | { type: "setDriver"; vehicleUuid: string; actorUuid: string | null }
+  | { type: "setTeam"; vehicleUuid: string; actorUuid: string; on: boolean }
+  | { type: "setRole"; roleId: RoleId; actorUuid: string | null }
+  | { type: "funds"; actorUuid: string; coins: Coins; direction: "deposit" | "withdraw" }
+  | { type: "setPlan"; activity: Activity; course: HexKey[]; routeId: string | null; text: string }
+  | { type: "askStop" };
 
 export interface RequestEnvelope {
   id: string;
@@ -340,4 +282,104 @@ export interface RequestEnvelope {
 export interface RequestResult {
   ok: boolean;
   error?: string;
+}
+
+// ---------- The day (engine ⇄ travel, DESIGN §4.5–§4.11) ----------
+
+export interface VehicleInfo {
+  actorUuid: string;
+  name: string;
+  milesPerDay: number;
+  hp: number;
+  maxHp: number;
+  cargo: number; // lb carried, riders beyond the seats included
+  cargoCapacity: number;
+  teamStrength: number; // Large equivalents pulling
+  teamRequired: number;
+  driver: string | null;
+}
+
+export interface WalkerInfo {
+  actorUuid: string;
+  name: string;
+  landSpeed: number; // ft, after pf1's own encumbrance
+}
+
+export interface EaterInfo {
+  actorUuid: string;
+  food: number;
+  water: number;
+  wage: number; // cp/day
+}
+
+export interface DayContext {
+  activity: Activity;
+  position: HexKey;
+  course: HexKey[]; // hexes still to enter (travel)
+  map: MapData; // GM truth (the engine applies map.rules to region-less hexes)
+  knowledge: Record<HexKey, KnowledgeState>;
+  eaters: EaterInfo[];
+  vehicles: VehicleInfo[];
+  walkers: WalkerInfo[]; // travellers on foot (not riding, driving or pulling)
+  roles: Partial<Record<RoleId, string | null>>;
+  rolesHeld: Record<string, number>; // actor UUID -> roles held, driving included (doubling)
+  stock: { rations: number; water: number }; // person-days in the vehicles
+  funds: number; // cp
+  /** Value of the repair materials in the vehicles, cp (DESIGN §4.6: repairs use 10 gp of them). */
+  repairStock: number;
+  tripDay: number; // 1-based day of the trip (encounter bonus)
+  exploreDays: number; // days already spent exploring this hex
+  settings: CaravanSettings;
+}
+
+export interface CheckSpec {
+  id: CheckId; // a RoleId, or `driver:<vehicle uuid>`
+  roleId: RoleId | "driver";
+  label: string; // "Navigator", "Driver (Wagon)"
+  actorUuid: string | null; // null = vacant (fails)
+  skills: string[];
+  dc: number;
+  penalty: number; // doubling penalty to subtract from the roll
+  bonus: number; // added to the roll (Navigator +4 in a Mapped hex)
+  auto: boolean; // no roll: automatic success (road)
+}
+
+export interface Pace {
+  milesPerDay: number;
+  setBy: string; // name of the vehicle or walker setting it
+  blocked: string | null; // why the caravan can't move, or null
+}
+
+export interface DayPreview {
+  moving: boolean;
+  pace: Pace;
+  hexes: HexKey[]; // hexes the caravan enters today if the Navigator succeeds
+  road: boolean; // every step today is on a route
+  checks: CheckSpec[]; // every check made today (auto ones included)
+}
+
+export interface CheckResult extends CheckSpec {
+  total: number | null; // roll + bonus - penalty; null = vacant or unreadable
+  success: boolean;
+}
+
+export interface DayOutcome {
+  checks: CheckResult[];
+  pace: Pace;
+  moved: HexKey[]; // hexes entered (empty when lost, blocked or stationary)
+  lost: boolean;
+  end: HexKey; // where the caravan ends the day
+  drain: { rations: number; water: number }; // person-days to remove
+  preserved: SupplyTrack[]; // tracks the Forager kept undrained
+  wages: number; // cp due today
+  wear: { vehicleUuid: string; dice: string; damage: number }[];
+  repair: { vehicleUuid: string; hp: number; cost: number } | null;
+  knowledge: Record<HexKey, KnowledgeState>; // states to raise to
+  revealed: HexKey | null; // explored to the end (all elements shown)
+  exploreDaysNeeded: number; // explore: total days this hex takes
+  encounter: { d20: number; bonus: number; total: number; table: string | null };
+  surprised: boolean;
+  longTermCare: boolean;
+  /** The trip ends after this day (destination reached, exploring done, one-day activity done). */
+  done: boolean;
 }
