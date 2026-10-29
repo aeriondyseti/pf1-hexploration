@@ -88,6 +88,28 @@ describe("trip flow", () => {
     expect(store.getCaravan()).toMatchObject({ position: "5,7", trip: null, journeyDay: 3 });
   });
 
+  it("Travel all stops after one lost day when the Navigator is vacant", async () => {
+    await caravan.setRole("navigator", null);
+    await travel.setPlan({ activity: "travel", course: ["5,5", "5,6"], routeId: null }, "plotted");
+    await travel.approve();
+    await travel.travelAll();
+    expect(store.getCaravan()).toMatchObject({ position: "5,4", journeyDay: 1 });
+    expect(store.getCaravan().trip).not.toBeNull();
+  });
+
+  it("Undo restores the day but keeps roster and role edits made since", async () => {
+    await travel.setPlan({ activity: "travel", course: ["5,5", "5,6"], routeId: null }, "plotted");
+    await travel.approve();
+    await travel.nextDay();
+    const scout = world.createActor({ name: "Pip", type: "npc" });
+    expect((await caravan.add(scout.uuid)).ok).toBe(true);
+    expect((await caravan.setRole("scout", scout.uuid)).ok).toBe(true);
+    await travel.undo();
+    const c = store.getCaravan();
+    expect(c).toMatchObject({ position: "5,4", journeyDay: 0, roles: { navigator: pc.uuid, scout: scout.uuid } });
+    expect(c.travellers.map((t) => t.name)).toContain("Pip");
+  });
+
   it("refuses a course that isn't a chain of adjacent hexes", async () => {
     asPlayer();
     const res = await travel.setPlan({ activity: "travel", course: ["5,7"], routeId: null }, "teleport");

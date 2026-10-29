@@ -61,7 +61,7 @@ export function plotCourse(): void {
 
 function onPointerDown(event: PointerEvent): void {
   if (!active || event.button !== 0) return;
-  event.stopPropagation();
+  event.stopImmediatePropagation(); // keep the click from Foundry/PIXI (token selection, the painter)
   event.preventDefault();
   const pt = canvas.canvasCoordinatesFromClient({ x: event.clientX, y: event.clientY });
   const at = key(canvas.grid.getOffset(pt));

@@ -105,8 +105,8 @@ export interface UndoApi {
   undo(): Promise<string | null>;
   /** Label of the day that can be undone, or null. */
   available(): string | null;
-  /** GM: note world time the day advanced, so undo can rewind it. */
-  recordTime(seconds: number): Promise<void>;
+  /** GM: note the world time the day advanced and party funds after it, so undo can rewind both. */
+  recordTime(seconds: number, fundsAfter: number): Promise<void>;
 }
 
 // ---------- pf1 adapter (src/pf1/) ----------

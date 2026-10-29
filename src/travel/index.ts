@@ -228,6 +228,10 @@ async function runDay(): Promise<DayOutcome | null> {
     const a = actorOf(w.vehicleUuid);
     if (a && w.damage > 0) await pf1Adapter.setVehicleHp(a, pf1Adapter.vehicleHp(a).hp - w.damage);
   }
+  if (out.repair && after.funds < out.repair.cost) {
+    extra.push(`No repairs: party funds can't cover ${coinText(out.repair.cost)} after wages.`);
+    out.repair = null;
+  }
   if (out.repair) {
     const a = actorOf(out.repair.vehicleUuid);
     if (a) {
@@ -258,7 +262,7 @@ async function runDay(): Promise<DayOutcome | null> {
   if (out.moved.length) await moveToken(sceneId, out.end);
   await store.setCaravan(after);
   await game.time.advance(DAY_SECONDS);
-  await undo.recordTime(DAY_SECONDS);
+  await undo.recordTime(DAY_SECONDS, after.funds);
 
   // Cards: the public summary, and the encounter for the GM only (invariant 1).
   await ChatMessage.create({ content: summaryCard(after.journeyDay, trip.activity, out, extra) });
@@ -318,6 +322,8 @@ export const travel = {
       if (!before.position) return notifications()?.warn("Place the caravan on the map first.");
       const plan = before.plan;
       if (plan.activity === "travel" && !plan.course.length) return notifications()?.warn("The plan has no course. Plot one first.");
+      if (plan.activity === "travel" && !validCourse(before.position, plan.course))
+        return notifications()?.warn("The course no longer starts at the caravan's hex. Plot it again.");
       const after = clone(before);
       after.trip = { activity: plan.activity, course: [...plan.course], day: 0, exploreDays: 0 };
       after.plan = { activity: plan.activity, course: [], routeId: null, lastEdit: null };
@@ -349,6 +355,10 @@ export const travel = {
         break;
       }
       if (out.pace.blocked) break;
+      if (out.lost || (store.getCaravan().trip?.activity === "travel" && !out.moved.length)) {
+        notifications()?.info("Travel all stopped: the caravan made no progress today.");
+        break;
+      }
     }
   },
 

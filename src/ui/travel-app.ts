@@ -65,8 +65,8 @@ export function travelAppClass(): any {
         undo: () => attempt(() => travel.undo()),
         askStop: () =>
           attempt(async () => {
-            await authority.send({ type: "askStop" });
-            toast("Asked the GM to stop the caravan.");
+            const res = await authority.send({ type: "askStop" });
+            toast(res.ok ? "Asked the GM to stop the caravan." : (res.error ?? "No GM connected."), res.ok ? "info" : "warn");
           }),
       },
     };
@@ -88,7 +88,13 @@ export function travelAppClass(): any {
         ? `<h3>Today's checks</h3><table class="pf1hex-checks"><tbody>${preview.checks
             .map((ch) => {
               const who = ch.actorUuid ? esc(actorFor(ch.actorUuid)?.name ?? "?") : "<em>vacant</em>";
-              const dc = ch.auto ? "road: no check" : `DC ${ch.dc}${ch.penalty ? ` (−${ch.penalty})` : ""}${ch.bonus ? ` (+${ch.bonus})` : ""}`;
+              // Players' previews are built from the party view (no region DC mods), so they show who rolls,
+              // not a DC that may differ from the one rolled (invariant 1).
+              const dc = ch.auto
+                ? "road: no check"
+                : gm
+                  ? `DC ${ch.dc}${ch.penalty ? ` (−${ch.penalty})` : ""}${ch.bonus ? ` (+${ch.bonus})` : ""}`
+                  : `rolls${ch.penalty ? ` (−${ch.penalty})` : ""}`;
               return `<tr><td>${esc(ch.label)}</td><td>${who}</td><td>${dc}</td></tr>`;
             })
             .join("")}</tbody></table>`
@@ -161,7 +167,10 @@ export function travelAppClass(): any {
       (this.element as HTMLElement).addEventListener("change", (e) => {
         const t = e.target as HTMLSelectElement;
         if (t.name !== "route") return;
-        const route = t.value ? store.partyView(store.getCaravan().sceneId ?? undefined).routes[t.value] : null;
+        const sceneId = store.getCaravan().sceneId ?? undefined;
+        // Look the route up in the same map the select was built from (the GM lists hidden roads too).
+        const map = game.user?.isGM ? store.getMap(sceneId) : store.partyView(sceneId);
+        const route = t.value ? map.routes[t.value] : null;
         const course = route ? courseAlong(route, store.getCaravan().position) : [];
         void attempt(async () => {
           const res = await travel.setPlan({ activity: "travel", course, routeId: route?.id ?? null }, route ? `chose ${route.name || "a road"}` : "cleared the road");

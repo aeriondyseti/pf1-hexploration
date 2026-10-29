@@ -79,7 +79,8 @@ function walkerMiles(ft: number): number {
 function vehicleBlock(v: DayContext["vehicles"][number]): string | null {
   if (v.driver === null) return `${v.name} has no driver`;
   if (v.teamStrength < v.teamRequired) return `${v.name} is short of draft animals`;
-  if (v.hp <= 0) return `${v.name} is wrecked`;
+  // maxHp 0 = HP unknown (unreadable or unset on the pf1 vehicle): never wrecked or broken.
+  if (v.maxHp > 0 && v.hp <= 0) return `${v.name} is wrecked`;
   if (v.cargo > 2 * v.cargoCapacity) return `${v.name} is overloaded`;
   return null;
 }
@@ -93,7 +94,7 @@ function pace(ctx: DayContext): Pace {
   for (const v of ctx.vehicles) {
     blocked ??= vehicleBlock(v);
     let miles = v.milesPerDay;
-    if (v.hp <= v.maxHp / 2) miles = miles / 2;
+    if (v.maxHp > 0 && v.hp < v.maxHp / 2) miles = miles / 2; // broken: more than half HP lost (UCombat)
     if (v.cargo > v.cargoCapacity) miles = slower(miles);
     consider(miles, v.name);
   }

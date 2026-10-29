@@ -129,8 +129,14 @@ describe("pace", () => {
   it("the wagon sets pace over a faster walker", () => {
     expect(engine.pace(ctx({ walkers: [walker("Elf", 30)] })).setBy).toBe("Wagon");
   });
-  it("broken halves the vehicle's pace", () => {
-    expect(engine.pace(ctx({ vehicles: [wagon({ hp: 15 })] })).milesPerDay).toBe(8);
+  it("broken (more than half HP lost) halves the vehicle's pace; exactly half is not broken", () => {
+    expect(engine.pace(ctx({ vehicles: [wagon({ hp: 14 })] })).milesPerDay).toBe(8);
+    expect(engine.pace(ctx({ vehicles: [wagon({ hp: 15 })] })).milesPerDay).toBe(16);
+  });
+  it("unknown HP (maxHp 0) is neither wrecked nor broken", () => {
+    const p = engine.pace(ctx({ vehicles: [wagon({ hp: 0, maxHp: 0 })] }));
+    expect(p.blocked).toBeNull();
+    expect(p.milesPerDay).toBe(16);
   });
   it("1.5x cargo is one category slower", () => {
     const p = engine.pace(ctx({ vehicles: [wagon({ cargo: 1500 })] }));

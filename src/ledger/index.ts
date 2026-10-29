@@ -14,6 +14,7 @@ interface Snapshot {
   party: PartyMap | null;
   token: { uuid: string; x: number; y: number } | null;
   seconds: number;
+  fundsAfter: number | null; // party funds when the day finished (undo restores the day's change only)
 }
 
 const FLAG = "lastDay";
@@ -67,14 +68,16 @@ export const undo = {
       party: caravan.sceneId ? store.getPartyMap(caravan.sceneId) : null,
       token: token ? { uuid: token.uuid, x: token.x, y: token.y } : null,
       seconds: 0,
+      fundsAfter: null,
     };
     await write(snap);
   },
 
-  async recordTime(seconds: number) {
+  async recordTime(seconds: number, fundsAfter: number) {
     const snap = read();
     if (!snap) return;
     snap.seconds += seconds;
+    snap.fundsAfter = fundsAfter;
     await write(snap);
   },
 
@@ -96,7 +99,18 @@ export const undo = {
     if (snap.sceneId && snap.party) await store.setPartyMap(snap.sceneId, snap.party);
     if (snap.token) await fromUuidSync(snap.token.uuid)?.update?.({ x: snap.token.x, y: snap.token.y });
     if (snap.seconds) await game.time.advance(-snap.seconds);
-    await store.setCaravan(snap.caravan);
+    // Restore only what the day changed: roster, roles and plan edits made since then stay; funds get the
+    // day's own change (wages, repairs) back, so deposits and withdrawals made since are kept.
+    const now = store.getCaravan();
+    const dayDelta = snap.fundsAfter === null ? 0 : snap.caravan.funds - snap.fundsAfter;
+    await store.setCaravan({
+      ...now,
+      position: snap.caravan.position,
+      sceneId: snap.caravan.sceneId,
+      journeyDay: snap.caravan.journeyDay,
+      trip: snap.caravan.trip,
+      funds: now.funds + dayDelta,
+    });
     await write(null);
     store.notify();
     return snap.label;
