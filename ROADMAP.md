@@ -10,60 +10,77 @@ Status: next · later. Each `§` cites the relevant [DESIGN.md](./DESIGN.md) sec
 
 ---
 
-## Milestone 2 — Knowledge
+## Milestone 2 — The MVP rework
 
-- **2.1 Explored and Mapped states** *(§4.3)* — Cartographer results set hex states; routes through Mapped hexes
-  skip rolls; party map shows only Explored/Mapped detail. *(later)*
-  **Done-when:** a failed Cartographer marks the leg's hexes Explored, a success marks them Mapped, and the next leg
-  along that route resolves with no roll.
+Cut the module back to its core and move its numbers onto published rules (ADR-0008; owner interview 2026-10-29).
+Each sprint **removes the 0.1.x code its part replaces**, so nothing cut lingers. The table stays on 0.1.14 until
+2.5 ships; 0.2.x releases before then are for live checks only. The 1.15 muster fixes are dropped (their muster is
+replaced); its "unreadable roll" warning lives on in 2.4.
 
-- **2.2 Reveal tags and lore sharing** *(§4.3)* — GM tags hex/route sets and enables them; tags link to items or
-  actors; actor-linked lore is owner-first with a Share action. *(later)*
-  **Done-when:** enabling a "Nomad Lore" tag reveals its hexes to Sabrina's owner only; pressing Share reveals them to
-  the party; disabling the tag hides them again; the GM always sees everything.
+- **2.1 Map model** *(§4.2, §4.3)* — published terrain types with their multipliers and getting-lost DCs; UC terrain
+  elements as the only tags; regions with encounter table, defaults, resource-use modifiers and a DC modifier;
+  routes as highway or road hex chains; the painter, hex layer, tooltip and Hex View panel updated to match; 0.1.x
+  maps migrated. Removes difficulty grades, custom tags and their icon overrides, per-hex encounter mods, storm
+  thresholds, and route days, difficulty, encounter bonus, bargain, effects and prompts. *(next)*
+  **Done-when:** the painter offers the §4.2 terrain list and the six UC elements and nothing else; a region saves
+  rations and water multipliers and a DC modifier; a route saves as highway or road; a 0.1.x scene loads with its
+  terrain mapped per §4.2 and no dropped field left in its data; a player's tooltip shows terrain and elements only
+  for Explored or Mapped hexes and never a Secret element before the hex is explored.
 
-## Milestone 3 — The Storm
+- **2.2 Caravan and vehicles** *(§4.4, §4.7, §4.9)* — the Caravan sheet rebuilt on the rebuild's FinalCaravan
+  mock-up: travellers (seat or on foot, role, eats/day, wage, status), vehicle cards (Driver, Pulled by, seats,
+  cargo, HP), tiles, party funds; supplies summed from the vehicles' inventories; `hx.caravan` on the new model.
+  Removes the Caravan actor's own hold, Wagon Condition, the draft flag and required draft count, and pack
+  import/export. *(later)*
+  **Done-when:** dropping a pf1 vehicle and three actors on the sheet links them; a player seats their own PC in the
+  wagon and drags their horse onto Pulled by, and can't do either for an actor they don't own; a ration in the
+  wagon's inventory shows in the Food tile, one in a PC's own pack doesn't; the wagon's card warns when undriven,
+  under-teamed (UE defaults) or over cargo capacity, counting a rider beyond the seats as cargo; a player deposits
+  5 gp from their character into party funds and withdraws it, and the GM is whispered each time.
 
-- **3.1 Drift** *(§4.10)* — drift effects (terrain and difficulty, Mapped decay, routes open/close, landmarks move)
-  triggered per leg on arrival and from encounter results; players see "has shifted" until contact. *(later)*
-  **Done-when:** a seeded drift changes a Mapped hex's terrain; the party map shows it as shifted with no detail;
-  entering the hex reveals the new terrain; drift is undoable.
+- **2.3 Daily engine** *(§4.5–§4.11)* — the pure, seeded engine for one day: pace (slowest vehicle or walker,
+  overload, broken), hexes moved by terrain and road, role DCs and results (doubling, vacancy, no Driver or
+  Navigator check on roads, Mapped +4), drain with region modifiers, wages, wear, the encounter roll, Explore
+  timing. Removes the leg engine (one roll per leg, forced march, at-zero conditions, the Mapped-leg and
+  draft-shortfall rules). Closes TD-0003. *(later)*
+  **Done-when:** unit tests cover every row of §4.6, the §4.8 pace rules (a walker slower than the wagon sets pace;
+  a broken wagon halves it; 1.5× cargo gives heavy-load pace, 2.1× stops), whole-hex movement (a wagon makes 1 hex a
+  day in trackless forest, never less; a 30-ft party on foot makes 2 on a highway), no Navigator or Driver roll on a
+  road, wear of 1d4 on plains, 2d6 in forest with a failed Driver, 1d8 in a Difficult
+  forest hex and none on a road, the §4.10 exploration table, and wages short of funds; the same seed gives the same
+  day.
 
-- **3.2 Navigator misdirection** *(§4.10)* — a per-region switch from +1 day to secret misdirection. *(later)*
-  **Done-when:** in a misdirection region a failed Navigator moves the caravan into a different hex visible only to
-  the GM until the party makes contact; elsewhere it adds +1 day.
+- **2.4 Trip flow** *(§4.5, §4.10, §4.13)* — the Travel window: choose an activity, plot a course on the canvas
+  (players included) or pick a known route, GM approval, **Next Day** and **Travel all**, the daily auto-roll and
+  summary card, the GM's encounter whisper, token movement, world time, and undo of the last day. Removes the
+  muster (claims, roll buttons, resolve), the leg chat card, the mini-map and the multi-step ledger. Closes
+  TD-0001. *(later)*
+  **Done-when:** a player plots a three-hex course and it waits for the GM; on approval, Next Day rolls every filled
+  role from its holder's sheet with no dialog, posts one card with each total, DC and result, moves the token,
+  drains the wagon's rations, pays wages and advances the date; Travel all runs to the destination and stops early on
+  an encounter; Undo restores the last day exactly and a second Undo does nothing; a roll with no readable total
+  warns the GM with role and actor.
 
-- **3.3 Heat** *(§4.10)* — region heat bands, water multipliers, daily Fort saves, mitigations. *(later)*
-  **Done-when:** a Very hot region doubles water drain and prompts a daily Fort save (DC 15 +1 per consecutive day);
-  an actor with a heat mitigation flag is exempt.
-
-## Milestone 4 — Wagon and companions
-
-- **4.1 Linked pf1 vehicle** *(§4.7)* — optional vehicle link with the two bridges. *(later)*
-  **Done-when:** Condition 0 gives the linked vehicle the broken condition; destroying the vehicle sets Condition 0;
-  with no link, nothing changes.
-
-- **4.2 Draft rule** *(§4.7)* — required draft count; missing animals add days. *(later)*
-  **Done-when:** removing one of two required camels makes the next leg take the configured extra days.
-
-- **4.3 NPC and animal morale** *(§4.10)* — morale track for NPCs/animals; penalties, refusals, desertion. *(later)*
-  **Done-when:** lowering an NPC's morale through each threshold applies the role penalty, then blocks role claims,
-  then prompts the GM with a desertion that removes the NPC from the roster when confirmed.
+- **2.5 Explore, Forage and Rest** *(§4.10, §4.6)* — the three stationary activities: Explore's multi-day timing
+  and reveal, Forage's doubled yield, Rest's Wainwright repair (10 gp from funds) and long-term care. Releases the
+  MVP. *(later)*
+  **Done-when:** exploring a forest hex at 30 ft takes two days and then shows the party its Secret element and marks
+  it Mapped; a successful Forage day drains neither rations nor water; a Rest day with a successful Wainwright
+  restores 10 HP to the wagon and takes 10 gp from party funds; Navigator and Drivers don't roll on any of them.
 
 ## Chores
 
 Committed and nobody is doing them: the owner's own acts, and live checks of what is built. Not the loop's work
 unless an agent can do one.
 
-- **Live check on Forge, v0.1.0** (owner): install from the manifest URL in the duplicate campaign world on the
-  "Solaar Desert: Stormlands" scene (Hexagonal Rows, Odd); create a Caravan, import the KtP pack, run the Borrowed
-  Oasis leg with one player client (claim, roll, resolve, Next Day ×3, Undo); report console errors. Things only a
-  live world can confirm: the caravan subtype holding pf1 items and containers on pf1's base actor class; the socket
-  passing the sender's user id (ADR-0002 note in DESIGN §6); the hex layer tinting tokens from `canvas.interface`;
-  brush strokes also starting Foundry's selection rectangle.
-- **Local Foundry v13 test install** (owner provides the licence key and a timed Node.js download link): pf1 11.11,
-  a hex-row test world, and a Playwright harness that runs a leg as GM and player and fails on console errors.
+- **Live check on Forge after 2.2 and after 2.5** (owner): in the duplicate campaign world on the "Solaar Desert:
+  Stormlands" scene, link a pf1 vehicle and the party to a Caravan and run three days with one player client;
+  report console errors. Only a live world can confirm: pf1 vehicle actors holding inventory and containers; the
+  vehicle's HP and broken state as pf1 exposes them; auto-rolling pf1 skills with no dialog; the socket passing the
+  sender's user id.
+- **Confirm the provisional defaults** in DESIGN §4.14 (owner).
 - **Confirm ADR-0002** (owner): invariant 1 narrowed to "never rendered, never sent".
-- **Confirm the provisional defaults** in DESIGN §4.13 and ADR-0003 (draft shortfall +1 day per missing animal;
-  wholly Mapped legs auto-succeed every role). *(owner)*
-- **Merge the `sprint/mvp` PR** into `main` (v0.1.0 was released from the branch). *(owner)*
+- **Re-make the KtP world pack** for the new model (owner): the Stormlands region (terrain defaults, water ×2,
+  +5 DC), its routes as roads, the Solaar landmarks.
+- **Local Foundry v13 test install** (owner provides the licence key and a timed Node.js download link): pf1 11.11,
+  a hex-row test world, and a Playwright harness that runs a day as GM and player and fails on console errors.
