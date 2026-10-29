@@ -20,9 +20,6 @@ the next milestone comes from a `grooming` pass over IDEAS.md.
 Committed and nobody is doing them: the owner's own acts, and live checks of what is built. Not the loop's work
 unless an agent can do one.
 
-- **Run local-code-review on the 0.2.5 rework** (agent): 2.1–2.5 were built in one sitting before a game, with
-  unit and integration tests but without the multi-agent review step; fix or log what it finds.
-
 - **Live check on Forge, v0.2.5** (owner): in the duplicate campaign world on the "Solaar Desert:
   Stormlands" scene, link a pf1 vehicle and the party to a Caravan and run three days with one player client;
   report console errors. Only a live world can confirm: pf1 vehicle actors holding inventory and containers; the
