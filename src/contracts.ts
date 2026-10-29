@@ -59,6 +59,13 @@ export interface SupplyItem {
   vehicleUuid: string;
 }
 
+export interface RepairItem {
+  item: any;
+  container: any | null;
+  vehicleUuid: string;
+  unitValue: number; // cp per unit (pf1 price × 100)
+}
+
 export interface StoreApi {
   registerSettings(): void;
   /** The designated caravan actor (world setting `caravanActor`), else the world's first caravan actor. */
@@ -80,6 +87,11 @@ export interface StoreApi {
   /** GM: set a supply item's quantity (whole numbers). */
   setSupplyQuantity(supply: SupplyItem, quantity: number): Promise<void>;
   supplyTotals(): { rations: number; water: number };
+  /** Repair materials in the linked vehicles: items flagged `supply: repair` or named "Repair Materials" (containers
+   *  flagged repair count their contents). unitValue = the pf1 price per unit, in cp. */
+  repairItems(): RepairItem[];
+  /** Total value of repair materials, cp. */
+  repairValue(): number;
   onChange(cb: () => void): () => void;
   notify(): void;
 }

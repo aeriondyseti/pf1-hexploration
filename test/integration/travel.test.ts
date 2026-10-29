@@ -110,6 +110,37 @@ describe("trip flow", () => {
     expect(c.travellers.map((t) => t.name)).toContain("Pip");
   });
 
+  it("a Rest-day repair uses 10 gp of Repair Materials from the vehicle, not party funds", async () => {
+    await wagon.update({ "system.attributes.hp.value": 12 });
+    const materials = wagon.createItem({ name: "Repair Materials", system: { quantity: 15, price: 1 } });
+    const wright = world.createActor({ name: "Hessa", type: "npc", skillTotal: 30 });
+    await caravan.add(wright.uuid);
+    await caravan.setRole("wainwright", wright.uuid);
+    const funds = store.getCaravan().funds;
+    await travel.setPlan({ activity: "rest", course: [], routeId: null }, "chose rest");
+    await travel.approve();
+    await travel.nextDay();
+    expect(Number((wagon as any).system.attributes.hp.value)).toBe(22);
+    expect(Number(materials.system.quantity)).toBe(5);
+    expect(store.getCaravan().funds).toBe(funds);
+    await travel.undo();
+    expect(Number(materials.system.quantity)).toBe(15);
+    expect(Number((wagon as any).system.attributes.hp.value)).toBe(12);
+  });
+
+  it("no repair when the vehicles carry less than 10 gp of Repair Materials", async () => {
+    await wagon.update({ "system.attributes.hp.value": 12 });
+    const materials = wagon.createItem({ name: "Repair Materials", system: { quantity: 9, price: 1 } });
+    const wright = world.createActor({ name: "Hessa", type: "npc", skillTotal: 30 });
+    await caravan.add(wright.uuid);
+    await caravan.setRole("wainwright", wright.uuid);
+    await travel.setPlan({ activity: "rest", course: [], routeId: null }, "chose rest");
+    await travel.approve();
+    await travel.nextDay();
+    expect(Number((wagon as any).system.attributes.hp.value)).toBe(12);
+    expect(Number(materials.system.quantity)).toBe(9);
+  });
+
   it("refuses a course that isn't a chain of adjacent hexes", async () => {
     asPlayer();
     const res = await travel.setPlan({ activity: "travel", course: ["5,7"], routeId: null }, "teleport");

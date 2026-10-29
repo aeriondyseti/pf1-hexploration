@@ -17,7 +17,7 @@ const ACTIVITIES: { id: Activity; label: string; icon: string; text: string }[] 
     text: "Stay and search this hex (Ultimate Campaign exploration time). When done, the hex is Mapped and its secrets show.",
   },
   { id: "forage", label: "Forage", icon: "fa-wheat-awn", text: "Stay a day. A successful Forager keeps both rations and water undrained." },
-  { id: "rest", label: "Rest", icon: "fa-campground", text: "Make camp a day. The Wainwright repairs (10 gp); the Healer gives long-term care." },
+  { id: "rest", label: "Rest", icon: "fa-campground", text: "Make camp a day. The Wainwright repairs, using 10 gp of Repair Materials from a vehicle; the Healer gives long-term care." },
 ];
 
 /** The course along a known route from the caravan's hex: towards whichever end is further away. */

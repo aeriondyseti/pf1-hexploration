@@ -1,6 +1,6 @@
 // Store: where each piece of state lives. Whole-state objects are written as JSON strings
 // because setFlag/settings merge objects instead of replacing them.
-import type { StoreApi, SupplyItem } from "../contracts";
+import type { RepairItem, StoreApi, SupplyItem } from "../contracts";
 import { MAP_VERSION, migrateMap } from "./migrate";
 import {
   MODULE_ID,
@@ -284,6 +284,38 @@ export const store = {
       return;
     }
     await supply.item.update({ "system.quantity": after });
+  },
+
+  repairItems(): RepairItem[] {
+    const out: RepairItem[] = [];
+    const isRepair = (item: any, inherited: boolean) =>
+      inherited || item.getFlag?.(MODULE_ID, "supply") === "repair" || /^\s*repair materials?\s*$/i.test(String(item.name ?? ""));
+    for (const link of store.getCaravan().vehicles) {
+      let vehicle: any = null;
+      try {
+        vehicle = fromUuidSync(link.actorUuid);
+      } catch {
+        vehicle = null;
+      }
+      if (!vehicle) continue;
+      const visit = (items: Iterable<any>, container: any | null, inherited: boolean) => {
+        for (const item of items ?? []) {
+          if (item.type === "container") {
+            visit(item.items ?? [], item, isRepair(item, inherited));
+            continue;
+          }
+          if (!isRepair(item, inherited)) continue;
+          const price = Number(item.system?.price);
+          out.push({ item, container, vehicleUuid: link.actorUuid, unitValue: Number.isFinite(price) && price > 0 ? Math.round(price * 100) : 0 });
+        }
+      };
+      visit(vehicle.items ?? [], null, false);
+    }
+    return out;
+  },
+
+  repairValue(): number {
+    return store.repairItems().reduce((sum, r) => sum + r.unitValue * (Number(r.item.system?.quantity) || 0), 0);
   },
 
   supplyTotals() {

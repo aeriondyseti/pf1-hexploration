@@ -454,7 +454,7 @@ function suppliesSection(c: CaravanState, gm: boolean): string {
         const units = item.getFlag?.(MODULE_ID, UNITS_FLAG) ?? 1;
         const ref = `data-vehicle="${esc(v.actorUuid)}" data-item-id="${esc(item.id)}"`;
         items.push(`<tr><td>${esc(item.name)}${item.type === "container" ? ` <span class="pf1hex-muted">(container)</span>` : ""}</td><td>${esc(v.name)}</td>
-<td><select name="supplyFlag" ${ref}>${option("", "none", !track)}${option("rations", "rations", track === "rations")}${option("water", "water", track === "water")}</select></td>
+<td><select name="supplyFlag" ${ref}>${option("", "none", !track)}${option("rations", "rations", track === "rations")}${option("water", "water", track === "water")}${option("repair", "repair materials", track === "repair")}</select></td>
 <td><input type="number" min="0" step="0.1" name="supplyUnits" ${ref} value="${units}"></td></tr>`);
       }
     }
@@ -463,7 +463,9 @@ function suppliesSection(c: CaravanState, gm: boolean): string {
 <table class="pf1hex-table"><thead><tr><th>Item</th><th>Vehicle</th><th>Supply</th><th>Units / qty</th></tr></thead><tbody>${items.join("")}</tbody></table></details>`
       : "";
   }
-  return `<section><h3 class="pf1hex-label">SUPPLIES</h3>${list}${editor}</section>`;
+  const repair = store.repairValue();
+  const repairLine = `<p class="pf1hex-note">Repair Materials: ${cpText(repair)}${repair < 1000 ? " — a Rest-day repair needs 10 gp of them" : ""}.</p>`;
+  return `<section><h3 class="pf1hex-label">SUPPLIES</h3>${list}${repairLine}${editor}</section>`;
 }
 
 // ---------- events ----------
@@ -543,7 +545,7 @@ async function onFieldChange(t: HTMLInputElement): Promise<void> {
       const item = actorFor(vehicle)?.items?.get?.(t.dataset.itemId);
       if (!item) return;
       if (t.name === "supplyFlag") {
-        const track = t.value as SupplyTrack | "";
+        const track = t.value as SupplyTrack | "repair" | "";
         if (track) await item.setFlag(MODULE_ID, SUPPLY_FLAG, track);
         else await item.unsetFlag(MODULE_ID, SUPPLY_FLAG);
       } else {

@@ -72,6 +72,7 @@ function ctx(patch: Partial<DayContext> = {}): DayContext {
     rolesHeld: { nav: 1, sco: 1, for: 1, wai: 1, car: 1, hea: 1, drv: 1 },
     stock: { rations: 100, water: 100 },
     funds: 5000,
+    repairStock: 5000,
     tripDay: 1,
     exploreDays: 0,
     settings: { doublingPenalty: 4 },
@@ -451,8 +452,8 @@ describe("rest-day repair", () => {
     const c = ctx({ activity: "rest", vehicles: [wagon({ hp: 10 })] });
     expect(engine.resolveDay(c, totals(c, PASS), maxRoller()).repair).toEqual({ vehicleUuid: "w1", hp: 10, cost: 1000 });
   });
-  it("no repair without funds, without a wainwright, or with nothing damaged", () => {
-    const poor = ctx({ activity: "rest", vehicles: damaged, funds: 999 });
+  it("no repair without 10 gp of repair materials, without a wainwright, or with nothing damaged", () => {
+    const poor = ctx({ activity: "rest", vehicles: damaged, funds: 99999, repairStock: 999 });
     expect(engine.resolveDay(poor, totals(poor, PASS), maxRoller()).repair).toBeNull();
     const vacant = ctx({ activity: "rest", vehicles: damaged, roles: { wainwright: null } });
     expect(engine.resolveDay(vacant, totals(vacant, PASS), maxRoller()).repair).toBeNull();

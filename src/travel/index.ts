@@ -102,6 +102,24 @@ async function drainTrack(track: SupplyTrack, amount: number): Promise<number> {
   return remaining;
 }
 
+/** Use up repair materials worth `cost` cp from the vehicles (whole units, in inventory order).
+ *  Returns false, using nothing, when they're worth less than that. */
+async function useRepairMaterials(cost: number): Promise<boolean> {
+  const items = store.repairItems().filter((r) => r.unitValue > 0 && Number(r.item.system?.quantity) > 0);
+  if (items.reduce((sum, r) => sum + r.unitValue * Number(r.item.system.quantity), 0) < cost) return false;
+  let remaining = cost;
+  for (const r of items) {
+    if (remaining <= 0) break;
+    const qty = Number(r.item.system.quantity);
+    const take = Math.min(qty, Math.ceil(remaining / r.unitValue));
+    remaining -= take * r.unitValue;
+    const after = qty - take;
+    if (r.container) await r.container.updateContainerContents([{ _id: r.item.id, "system.quantity": after }]);
+    else await r.item.update({ "system.quantity": after });
+  }
+  return true;
+}
+
 async function moveToken(sceneId: string | null, hex: HexKey): Promise<void> {
   const actor = store.getCaravanActor();
   const scene = sceneId ? game.scenes?.get(sceneId) : canvas?.scene;
@@ -177,7 +195,7 @@ function summaryCard(day: number, activity: Activity, out: DayOutcome, extra: st
   if (drained.length) lines.push(`Supplies: ${drained.join(", ")}.`);
   if (out.preserved.length) lines.push(`The Forager kept the ${out.preserved.join(" and ")} undrained.`);
   for (const w of out.wear) lines.push(`${esc(actorOf(w.vehicleUuid)?.name ?? "Vehicle")} takes ${w.damage} wear (${w.dice}).`);
-  if (out.repair) lines.push(`Repairs: +${out.repair.hp} HP to ${esc(actorOf(out.repair.vehicleUuid)?.name ?? "the vehicle")} (${coinText(out.repair.cost)}).`);
+  if (out.repair) lines.push(`Repairs: +${out.repair.hp} HP to ${esc(actorOf(out.repair.vehicleUuid)?.name ?? "the vehicle")} (${coinText(out.repair.cost)} of Repair Materials used).`);
   if (out.longTermCare) lines.push("Long-term care tonight: up to six travellers heal double.");
   if (out.revealed) lines.push("The hex is fully explored.");
   lines.push(...extra);
@@ -228,17 +246,14 @@ async function runDay(): Promise<DayOutcome | null> {
     const a = actorOf(w.vehicleUuid);
     if (a && w.damage > 0) await pf1Adapter.setVehicleHp(a, pf1Adapter.vehicleHp(a).hp - w.damage);
   }
-  if (out.repair && after.funds < out.repair.cost) {
-    extra.push(`No repairs: party funds can't cover ${coinText(out.repair.cost)} after wages.`);
-    out.repair = null;
-  }
   if (out.repair) {
     const a = actorOf(out.repair.vehicleUuid);
-    if (a) {
+    if (a && (await useRepairMaterials(out.repair.cost))) {
       const { hp, maxHp } = pf1Adapter.vehicleHp(a);
       await pf1Adapter.setVehicleHp(a, Math.min(maxHp, hp + out.repair.hp));
-      after.funds -= out.repair.cost;
-    }
+    } else out.repair = null;
+  } else if (trip.activity === "rest" && ctx.repairStock < 1000 && out.checks.some((ch) => ch.roleId === "wainwright" && ch.actorUuid)) {
+    extra.push(`No repairs: the vehicles carry less than 10 gp of Repair Materials (${coinText(ctx.repairStock)}).`);
   }
   // Map knowledge.
   const sceneId = before.sceneId ?? canvas?.scene?.id ?? null;

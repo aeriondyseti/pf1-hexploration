@@ -325,6 +325,8 @@ export interface DayContext {
   rolesHeld: Record<string, number>; // actor UUID -> roles held, driving included (doubling)
   stock: { rations: number; water: number }; // person-days in the vehicles
   funds: number; // cp
+  /** Value of the repair materials in the vehicles, cp (DESIGN §4.6: repairs use 10 gp of them). */
+  repairStock: number;
   tripDay: number; // 1-based day of the trip (encounter bonus)
   exploreDays: number; // days already spent exploring this hex
   settings: CaravanSettings;

@@ -19,7 +19,7 @@ The MVP rework (ADR-0008): the module is cut back to its core and its numbers co
 - Every role is rolled automatically each day, with no dialog, at DCs drawn from the CRB, Ultimate Campaign and
   Ultimate Combat; one summary card per day shows each roll against its DC.
 - Activities: Travel, Explore (Ultimate Campaign exploration time; reveals the hex's secrets), Forage and Rest
-  (Wainwright repairs for 10 gp, Healer long-term care).
+  (the Wainwright repairs using 10 gp of Repair Materials carried in a vehicle; the Healer gives long-term care).
 - Players plot a course on the canvas (click a destination, shift-click waypoints) or follow a known road; the GM
   approves the plan, then steps with Next Day or Travel all.
 - Roads: CRB road speeds, no Navigator or Driver check and no vehicle wear.

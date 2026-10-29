@@ -183,7 +183,7 @@ DCs blend the KtP numbers with published rules (research in the appendix). A reg
 | **Scout** | Perception, Profession (scout) | 18 | Not surprised by the day's encounter | Surprised |
 | **Forager** | Survival, Knowledge (nature), Profession (hunter) | 10 + 2 × (eaters − 1) (CRB Survival: feed one more per 2 points over 10); sandy desert +10 (CRB: harsh desert DC 20); Resource −2 | The party keeps one track (rations or water, the one shorter in days) undrained that day | — |
 | **Driver** (each vehicle) | Handle Animal, Profession (driver) | 5 (UCombat, out of combat), **+5 for each step the terrain's trackless multiplier slows** travel (×1 → 5, ×¾ → 10, ×½ → 15, ×¼ → 20), Difficult +5. No check on a road (automatic success). | — | That vehicle takes one more wear die (§4.7) |
-| **Wainwright** | Craft (carpentry), Profession (wainwright) | Moving: 15. Rest day: 10 (UCombat repair). | Moving: cancels the day's wear on every vehicle. Rest day: repairs 10 HP on one vehicle for 10 gp from party funds. | Moving: — . Rest day: repairs 5 HP for 10 gp. |
+| **Wainwright** | Craft (carpentry), Profession (wainwright) | Moving: 15. Rest day: 10 (UCombat repair). | Moving: cancels the day's wear on every vehicle. Rest day: repairs 10 HP on one vehicle, using up 10 gp of **Repair Materials** (§4.9). | Moving: — . Rest day: repairs 5 HP, same materials. |
 | **Cartographer** | Knowledge (geography), Profession (cartographer) | 15 | Hexes entered today become Mapped | They become Explored |
 | **Healer/Cook** | Heal, Profession (cook) | 15 (CRB long-term care) | Up to six travellers get long-term care tonight (double natural healing), noted on the card | — |
 
@@ -232,6 +232,10 @@ condition (no separate track).
 - **Wages:** each traveller has a daily wage, default none for PCs; hirelings default to the CRB rates (trained
   **3 sp**, untrained **1 sp**), specialists set in gp (UC managers earn 2–5 gp). Wages are paid from party funds
   every day; if funds fall short, what can be paid is paid and the GM is whispered.
+- **Repair Materials:** items in the vehicles' inventories named "Repair Materials" or flagged `supply: repair`
+  (a flagged container counts its contents), valued at their pf1 price. A Rest-day repair uses up 10 gp of them
+  (UCombat: 10 gp of raw materials), in whole units; with less than 10 gp aboard there is no repair. Repairs never
+  take party funds.
 - **Every day** (moving or not) drains supplies, pays wages and makes the encounter roll.
 
 ### 4.10 Activities
@@ -245,7 +249,7 @@ The party chooses one activity at a time; the plan is shared and anyone in the p
   day the hex becomes Mapped and its elements are revealed. *(UC as written for now; the owner may home-brew it.)*
 - **Forage** — stay one day; the Forager rolls with the day's yield doubled: on a success the party keeps **both**
   tracks undrained.
-- **Rest** — stay one day; the Wainwright makes the rest-day repair; the Healer's long-term care applies.
+- **Rest** — stay one day; the Wainwright makes the rest-day repair (with Repair Materials); the Healer's long-term care applies.
 - On a day without movement, Navigator and Drivers don't roll and no wear applies.
 
 ### 4.11 Encounters

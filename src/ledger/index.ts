@@ -54,7 +54,7 @@ export const undo = {
     const snap: Snapshot = {
       label,
       caravan: structuredClone(caravan),
-      supplies: store.supplyItems().map((s) => ({
+      supplies: [...store.supplyItems(), ...store.repairItems()].map((s) => ({
         itemUuid: s.item.uuid ?? "",
         containerUuid: s.container?.uuid ?? null,
         itemId: s.item.id,

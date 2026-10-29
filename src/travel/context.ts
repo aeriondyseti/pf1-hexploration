@@ -83,6 +83,7 @@ export function buildDayContext(party = !game.user?.isGM): DayContext {
     rolesHeld: rolesHeld(c),
     stock: store.supplyTotals(),
     funds: c.funds,
+    repairStock: store.repairValue(),
     tripDay: (trip?.day ?? 0) + 1,
     exploreDays: trip?.exploreDays ?? 0,
     settings: store.getSettings(),

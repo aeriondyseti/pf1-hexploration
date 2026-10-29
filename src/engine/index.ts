@@ -336,7 +336,7 @@ function resolveDay(ctx: DayContext, totals: Record<string, number | null>, roll
   // Rest-day repair: hp is the HP restored.
   let repair: DayOutcome["repair"] = null;
   const wain = result("wainwright");
-  if (ctx.activity === "rest" && wain && wain.actorUuid !== null && ctx.funds >= REPAIR_COST) {
+  if (ctx.activity === "rest" && wain && wain.actorUuid !== null && ctx.repairStock >= REPAIR_COST) {
     let target: DayContext["vehicles"][number] | null = null;
     for (const v of ctx.vehicles) {
       const missing = v.maxHp - v.hp;
