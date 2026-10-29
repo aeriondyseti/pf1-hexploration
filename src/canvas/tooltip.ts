@@ -3,7 +3,7 @@
 import { store } from "../store";
 import { MODULE_ID, type HexKey } from "../types";
 import { hexInfo } from "./helpers";
-import { TERRAINS } from "./terrain";
+import { terrainLabel } from "./terrain";
 
 const DELAY_MS = 250;
 
@@ -59,9 +59,16 @@ function show(key: HexKey, clientX: number, clientY: number): void {
   const caravan = store.getCaravan();
   const info = hexInfo(map, key, {
     gm,
-    knowledge: store.getPartyMap().knowledge[key] ?? "unknown",
+    knowledge: gm ? (store.getPartyMap().knowledge[key] ?? "unknown") : undefined,
     caravanHere: caravan.sceneId === canvas.scene?.id && caravan.position === key,
-    terrainLabel: (t) => TERRAINS[t]?.label ?? t,
+    terrainLabel,
+    tableName: (uuid) => {
+      try {
+        return (fromUuidSync(uuid) as any)?.name ?? uuid;
+      } catch {
+        return uuid;
+      }
+    },
   });
   if (!info) return hide();
   el ??= Object.assign(document.body.appendChild(document.createElement("div")), { className: "pf1hex-tooltip" });

@@ -66,3 +66,33 @@ export function dragData(event: DragEvent): any | null {
     return null;
   }
 }
+
+/** "+3" / "-1". */
+export function signed(n: number): string {
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
+/** A copper amount as coins: 1234 -> "12 gp 3 sp 4 cp" (0 -> "0 cp"). */
+export function cpText(cp: number): string {
+  const total = Math.round(cp);
+  const parts: string[] = [];
+  const gp = Math.floor(total / 100);
+  const sp = Math.floor((total % 100) / 10);
+  const c = total % 10;
+  if (gp) parts.push(`${gp.toLocaleString()} gp`);
+  if (sp) parts.push(`${sp} sp`);
+  if (c || !parts.length) parts.push(`${c} cp`);
+  return parts.join(" ");
+}
+
+/** Initials for a name chip: "Mira Vel" -> "MV". */
+export function initials(name: string): string {
+  return (
+    String(name ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join("") || "?"
+  );
+}

@@ -1,32 +1,33 @@
-// Terrain palette, ported from the owner's earlier hexploration project (light fills).
-import type { Difficulty } from "../types";
+// Terrain palette (light fills) for the §4.2 terrain list. Labels come from TERRAIN_RULES.
+import { TERRAIN_KEYS, TERRAIN_RULES, type Terrain } from "../types";
 
 export interface TerrainDef {
   label: string;
   fill: string;
-  difficulty: Difficulty;
 }
 
-export const TERRAINS: Record<string, TerrainDef> = {
-  plains: { label: "Plains", fill: "#ede3c6", difficulty: "easy" },
-  forest: { label: "Forest", fill: "#c6d8a0", difficulty: "standard" },
-  hills: { label: "Hills", fill: "#dcc89a", difficulty: "standard" },
-  mountain: { label: "Mountain", fill: "#c4bcae", difficulty: "hard" },
-  marsh: { label: "Marsh", fill: "#a6c1c0", difficulty: "hard" },
-  desert: { label: "Desert", fill: "#ead5a3", difficulty: "hard" },
-  dunes: { label: "Dunes", fill: "#f0dca8", difficulty: "hard" },
-  scrubland: { label: "Scrubland", fill: "#d4ca94", difficulty: "standard" },
-  badlands: { label: "Badlands", fill: "#c89878", difficulty: "hard" },
-  canyon: { label: "Canyon", fill: "#b07556", difficulty: "brutal" },
-  oasis: { label: "Oasis", fill: "#a8cba0", difficulty: "easy" },
-  water: { label: "Water", fill: "#a6c1e0", difficulty: "brutal" },
-  road: { label: "Road", fill: "#c9b68a", difficulty: "easy" },
-  urban: { label: "Urban", fill: "#c4b0a0", difficulty: "easy" },
+const FILLS: Record<Terrain, string> = {
+  "desert-sandy": "#f0dca8",
+  "desert-rocky": "#c89878",
+  forest: "#c6d8a0",
+  hills: "#dcc89a",
+  jungle: "#8fbf7a",
+  moor: "#b8b48c",
+  mountains: "#c4bcae",
+  plains: "#ede3c6",
+  swamp: "#a6c1c0",
+  tundra: "#e4ecf0",
+  settlement: "#c4b0a0",
+  water: "#a6c1e0",
 };
 
-export const TERRAIN_KEYS = Object.keys(TERRAINS);
+export const TERRAINS: Record<string, TerrainDef> = Object.fromEntries(
+  TERRAIN_KEYS.map((k) => [k, { label: TERRAIN_RULES[k].label, fill: FILLS[k] }]),
+);
 
-/** Fill for any terrain label; unknown (custom or imported) labels get a neutral grey. */
+export { TERRAIN_KEYS };
+
+/** Fill for any terrain key; an unknown key gets a neutral grey. */
 export function terrainFill(terrain: string): string {
   return TERRAINS[terrain]?.fill ?? "#bbbbbb";
 }

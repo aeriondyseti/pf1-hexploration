@@ -5,7 +5,6 @@ import { store } from "../store";
 import type { HexKey, MapData } from "../types";
 import { MODULE_ID } from "../types";
 import {
-  DIFFICULTY_LETTER,
   borderSegments,
   colorToNumber,
   hexKey,
@@ -15,9 +14,10 @@ import {
   polylineMidpoint,
   starPoints,
 } from "./helpers";
+import { drawCourse } from "./course";
 import { draft } from "./state";
 import { getView, type ViewOptions } from "./view";
-import { DEFAULT_LANDMARK_ICON, DEFAULT_TAG_ICON, glyphOr, landmarkIcon, symbolColor, tagIcon, tagIconOverrides } from "./icons";
+import { DEFAULT_LANDMARK_ICON, DEFAULT_TAG_ICON, glyphOr, landmarkIcon, symbolColor, tagIcon } from "./icons";
 import { terrainFill } from "./terrain";
 
 let container: any = null;
@@ -95,7 +95,7 @@ export function drawLayer(): void {
 
   drawHexes(root, map, size, view);
   if (view.routes || view.routeNames) drawRoutes(root, map, size, view, gm);
-  if (view.leg) drawLeg(root, map, size);
+  if (view.leg) drawCourse(root, map, size);
   if (gm) drawDrafts(root, size); // painter previews always show
   if (view.landmarks || view.landmarkNames) drawLandmarks(root, map, size, view);
 }
@@ -107,7 +107,6 @@ function drawHexes(root: any, map: MapData, size: number, view: ViewOptions): vo
   root.addChild(fills, outlines, labels);
 
   if (view.borders) drawBorders(outlines, map, size);
-  const overrides = tagIconOverrides();
 
   for (const hex of Object.values(map.hexes)) {
     if (view.terrain) {
@@ -116,19 +115,13 @@ function drawHexes(root: any, map: MapData, size: number, view: ViewOptions): vo
       fills.endFill();
     }
 
-
     const c = center(hex.key);
-    if (view.difficulty) {
-      const letter = text(DIFFICULTY_LETTER[hex.difficulty] ?? "?", size / 6, 0x333333);
-      letter.position.set(c.x, c.y - size * 0.3);
-      labels.addChild(letter);
-    }
 
     if (view.tags && hex.tags.length) {
       const color = colorToNumber(symbolColor(map, hex.key));
       const step = size / 6;
       hex.tags.forEach((tag, n) => {
-        const t = icon(tagIcon(tag, overrides), DEFAULT_TAG_ICON, size / 9, color);
+        const t = icon(tagIcon(tag), DEFAULT_TAG_ICON, size / 9, color);
         if (!t) return;
         t.position.set(c.x + (n - (hex.tags.length - 1) / 2) * step, c.y - size * 0.12);
         labels.addChild(t);
@@ -167,6 +160,23 @@ function drawPolyline(g: any, keys: HexKey[]): { x: number; y: number }[] {
   return pts;
 }
 
+/** Dashed polyline through hex centres (PIXI Graphics has no native dash). */
+function drawDashed(g: any, pts: { x: number; y: number }[], dash: number, gap: number): void {
+  for (let n = 1; n < pts.length; n++) {
+    const a = pts[n - 1];
+    const b = pts[n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!len) continue;
+    const ux = (b.x - a.x) / len;
+    const uy = (b.y - a.y) / len;
+    for (let d = 0; d < len; d += dash + gap) {
+      const e = Math.min(len, d + dash);
+      g.moveTo(a.x + ux * d, a.y + uy * d);
+      g.lineTo(a.x + ux * e, a.y + uy * e);
+    }
+  }
+}
+
 function drawRoutes(root: any, map: MapData, size: number, view: ViewOptions, gm: boolean): void {
   const g = new PIXI.Graphics();
   root.addChild(g);
@@ -175,8 +185,17 @@ function drawRoutes(root: any, map: MapData, size: number, view: ViewOptions, gm
     if (gm && !route.knownToParty && !view.hiddenRoutes) continue;
     const color = parseColor(route.color, ROUTE_COLOR);
     const alpha = (route.knownToParty ? 0.85 : 0.3) * color.alpha;
-    g.lineStyle(Math.max(2, size / 16), color.rgb, view.routes ? alpha : 0);
-    const pts = drawPolyline(g, [route.from, ...route.hexes]);
+    const highway = route.kind === "highway";
+    const width = highway ? Math.max(3, size / 11) : Math.max(2, size / 18);
+    g.lineStyle(width, color.rgb, view.routes ? alpha : 0);
+    const keys = [route.from, ...route.hexes];
+    let pts: { x: number; y: number }[];
+    if (highway) {
+      pts = drawPolyline(g, keys);
+    } else {
+      pts = keys.map(center);
+      drawDashed(g, pts, size / 6, size / 10);
+    }
     const name = route.name?.trim();
     if (!name || !view.routeNames) continue;
     const mid = polylineMidpoint(pts);
@@ -185,18 +204,6 @@ function drawRoutes(root: any, map: MapData, size: number, view: ViewOptions, gm
     label.position.set(mid.x, mid.y - size * 0.12);
     root.addChild(label);
   }
-}
-
-// `map` is the party view for players, so the leg is cut to hexes they know (invariant 1).
-function drawLeg(root: any, map: MapData, size: number): void {
-  const leg = store.getCaravan().leg;
-  if (!leg || leg.status === "arrived" || !leg.plan.path.length) return;
-  const keys = [leg.plan.from, ...leg.plan.path].filter((k) => !!map.hexes[k]);
-  if (keys.length < 2) return;
-  const g = new PIXI.Graphics();
-  g.lineStyle(Math.max(4, size / 8), 0xffc400, 0.8);
-  drawPolyline(g, keys);
-  root.addChild(g);
 }
 
 function drawDrafts(root: any, size: number): void {
@@ -208,13 +215,6 @@ function drawDrafts(root: any, size: number): void {
     drawPolyline(g, [r.from, ...r.hexes]);
     const c = center(r.from);
     g.beginFill(0x00a0c0, 0.9).drawCircle(c.x, c.y, size / 10).endFill();
-  }
-  const p = draft.plotted;
-  if (p.from) {
-    g.lineStyle(Math.max(3, size / 12), 0xc000c0, 0.9);
-    drawPolyline(g, [p.from, ...p.path]);
-    const c = center(p.from);
-    g.beginFill(0xc000c0, 0.9).drawCircle(c.x, c.y, size / 10).endFill();
   }
   if (draft.stroke.length) {
     g.lineStyle(Math.max(2, size / 20), 0xffffff, 0.9);

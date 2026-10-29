@@ -1,41 +1,81 @@
 // Store: where each piece of state lives. Whole-state objects are written as JSON strings
 // because setFlag/settings merge objects instead of replacing them.
 import type { StoreApi, SupplyItem } from "../contracts";
-import { engine } from "../engine";
+import { MAP_VERSION, migrateMap } from "./migrate";
 import {
   MODULE_ID,
   CARAVAN_TYPE,
-  type Change,
+  ROLE_IDS,
   type CaravanSettings,
   type CaravanState,
   type HexKey,
   type KnowledgeState,
   type MapData,
-  type Pack,
   type PartyMap,
   type Region,
-  type RoleDef,
   type SupplyTrack,
+  type Traveller,
+  type VehicleLink,
 } from "../types";
 
-const PACK_FORMAT = "pf1-hexploration-pack";
 const listeners = new Set<() => void>();
 
 export function defaultCaravan(): CaravanState {
   return {
-    roster: [],
-    wagon: { condition: 11, max: 11 },
-    draftRequired: 0,
+    travellers: [],
+    vehicles: [],
+    roles: {},
+    funds: 0,
     sceneId: null,
     position: null,
     journeyDay: 0,
-    consecutiveForcedMarch: 0,
-    leg: null,
+    plan: { activity: "travel", course: [], routeId: null, lastEdit: null },
+    trip: null,
+  };
+}
+
+const finite = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+
+/** Read a saved caravan (current or 0.1.x format) into the current shape. */
+export function migrateCaravan(saved: any): CaravanState {
+  const base = defaultCaravan();
+  if (!saved || typeof saved !== "object") return base;
+  const travellers: Traveller[] = Array.isArray(saved.travellers)
+    ? saved.travellers
+    : Array.isArray(saved.roster)
+      ? saved.roster.map((m: any) => ({
+          actorUuid: String(m.actorUuid),
+          name: String(m.name ?? ""),
+          food: finite(m.food, 1),
+          water: finite(m.water, 1),
+          wage: 0,
+          seat: null,
+        }))
+      : [];
+  const vehicles: VehicleLink[] = Array.isArray(saved.vehicles) ? saved.vehicles : [];
+  const roles: CaravanState["roles"] = {};
+  if (saved.roles && typeof saved.roles === "object") {
+    for (const id of ROLE_IDS) {
+      const holder = saved.roles[id];
+      if (typeof holder === "string" || holder === null) roles[id] = holder;
+    }
+  }
+  const plan = saved.plan && typeof saved.plan === "object" ? { ...base.plan, ...saved.plan } : base.plan;
+  return {
+    travellers,
+    vehicles,
+    roles,
+    funds: finite(saved.funds, 0),
+    sceneId: typeof saved.sceneId === "string" ? saved.sceneId : null,
+    position: typeof saved.position === "string" ? saved.position : null,
+    journeyDay: finite(saved.journeyDay, 0),
+    plan,
+    trip: saved.trip && typeof saved.trip === "object" ? saved.trip : null,
   };
 }
 
 export function emptyMap(): MapData {
-  return { hexes: {}, regions: {}, landmarks: {}, routes: {} };
+  return { hexes: {}, regions: {}, landmarks: {}, routes: {}, version: MAP_VERSION };
 }
 
 function parseJson<T>(raw: unknown, fallback: T): T {
@@ -80,8 +120,8 @@ function publicRegion(region: Region): Region {
     color: region.color,
     encounterTable: null,
     dcMods: {},
+    rationsMultiplier: 1,
     waterMultiplier: 1,
-    stormThreshold: null,
   };
 }
 
@@ -90,16 +130,22 @@ export const store = {
     const register = (key: string) =>
       game.settings.register(MODULE_ID, key, { scope: "world", config: false, type: String, default: "" });
     register("caravanActor");
-    register("roles");
     register("settings");
-    register("tagIcons"); // JSON: tag -> Font Awesome icon name (overrides the built-in table)
 
-    const caravanUuid = () => game.settings.get(MODULE_ID, "caravanActor") as string;
-    const relevantActor = (actor: any) =>
-      !!actor && (actor.uuid === caravanUuid() || store.getCaravan().roster.some((m) => m.actorUuid === actor.uuid));
-    Hooks.on("updateActor", (actor: any) => relevantActor(actor) && store.notify());
+    const caravanUuid = () => store.getCaravanActor()?.uuid ?? "";
+    const linked = (uuid: string | undefined, vehiclesOnly: boolean) => {
+      if (!uuid) return false;
+      if (uuid === caravanUuid()) return true;
+      const c = store.getCaravan();
+      return c.vehicles.some((v) => v.actorUuid === uuid) || (!vehiclesOnly && c.travellers.some((t) => t.actorUuid === uuid));
+    };
+    Hooks.on("updateActor", (actor: any) => linked(actor?.uuid, false) && store.notify());
     for (const hook of ["updateItem", "createItem", "deleteItem"]) {
-      Hooks.on(hook, (item: any) => item?.parent?.uuid === caravanUuid() && store.notify());
+      // Items inside a container report the container's actor as their (grand)parent.
+      Hooks.on(hook, (item: any) => {
+        const owner = item?.parent?.documentName === "Item" ? item.parent.parent : (item?.actor ?? item?.parent);
+        if (linked(owner?.uuid, true)) store.notify();
+      });
     }
     Hooks.on("updateScene", (_scene: any, changes: any) => changes?.flags?.[MODULE_ID] !== undefined && store.notify());
     Hooks.on("updateSetting", (setting: any) => String(setting?.key ?? "").startsWith(`${MODULE_ID}.`) && store.notify());
@@ -119,8 +165,7 @@ export const store = {
 
   getCaravan(): CaravanState {
     const actor = store.getCaravanActor();
-    const saved = parseJson<Partial<CaravanState>>(actor?.getFlag(MODULE_ID, "caravan"), {});
-    return { ...defaultCaravan(), ...saved };
+    return migrateCaravan(parseJson<any>(actor?.getFlag(MODULE_ID, "caravan"), {}));
   },
 
   async setCaravan(next: CaravanState) {
@@ -130,23 +175,13 @@ export const store = {
   },
 
   getSettings(): CaravanSettings {
-    const saved = parseJson<Partial<CaravanSettings>>(game.settings.get(MODULE_ID, "settings"), {});
-    return { ...engine.DEFAULT_SETTINGS, ...saved };
-  },
-
-  getRoles(): RoleDef[] {
-    const saved = parseJson<RoleDef[] | null>(game.settings.get(MODULE_ID, "roles"), null);
-    return Array.isArray(saved) ? saved : engine.DEFAULT_ROLES;
-  },
-
-  async setRoles(roles: RoleDef[]) {
-    requireGM();
-    await game.settings.set(MODULE_ID, "roles", JSON.stringify(roles));
-    store.notify();
+    const saved = parseJson<any>(game.settings.get(MODULE_ID, "settings"), {});
+    return { doublingPenalty: finite(saved?.doublingPenalty, 4) };
   },
 
   getMap(sceneId?: string): MapData {
-    const saved = parseJson<Partial<MapData>>(getScene(sceneId)?.getFlag(MODULE_ID, "map"), {});
+    const saved = parseJson<any>(getScene(sceneId)?.getFlag(MODULE_ID, "map"), {});
+    if (saved?.version !== MAP_VERSION) return migrateMap(saved);
     return { ...emptyMap(), ...saved };
   },
 
@@ -158,7 +193,14 @@ export const store = {
 
   getPartyMap(sceneId?: string): PartyMap {
     const saved = parseJson<Partial<PartyMap>>(getScene(sceneId)?.getFlag(MODULE_ID, "knowledge"), {});
-    return { knowledge: { ...(saved.knowledge ?? {}) } };
+    return { knowledge: { ...(saved.knowledge ?? {}) }, revealed: Array.isArray(saved.revealed) ? [...saved.revealed] : [] };
+  },
+
+  async setPartyMap(sceneId: string, party: PartyMap) {
+    requireGM();
+    const next: PartyMap = { knowledge: { ...(party.knowledge ?? {}) }, revealed: [...(party.revealed ?? [])] };
+    await requireScene(sceneId).setFlag(MODULE_ID, "knowledge", JSON.stringify(next));
+    store.notify();
   },
 
   async setKnowledge(sceneId: string, keys: HexKey[], state: KnowledgeState) {
@@ -175,14 +217,16 @@ export const store = {
 
   partyView(sceneId?: string): MapData {
     const map = store.getMap(sceneId);
-    const { knowledge } = store.getPartyMap(sceneId);
+    const { knowledge, revealed } = store.getPartyMap(sceneId);
+    const shown = new Set(revealed ?? []);
     const view = emptyMap();
     if (map.baseColor) view.baseColor = map.baseColor;
 
     for (const [key, state] of Object.entries(knowledge)) {
       const hex = map.hexes[key];
       if (!hex || (state !== "explored" && state !== "mapped")) continue;
-      const tags = state === "explored" ? hex.tags.filter((t) => t !== "secret") : [...hex.tags];
+      // A Secret element shows only once the hex is explored to the end (DESIGN §4.3).
+      const tags = shown.has(key) ? [...hex.tags] : hex.tags.filter((t) => t !== "secret");
       view.hexes[key] = { ...hex, tags };
       const region = hex.region ? map.regions[hex.region] : undefined;
       if (region) view.regions[region.id] = publicRegion(region);
@@ -197,38 +241,49 @@ export const store = {
   },
 
   supplyItems(): SupplyItem[] {
-    const actor = store.getCaravanActor();
-    if (!actor) return [];
     const loose: SupplyItem[] = [];
     const packed: SupplyItem[] = [];
-    // A container counts its contents: each content item uses its own supply flag, else the container's.
-    const visit = (items: Iterable<any>, container: any | null, inherited: unknown) => {
-      for (const item of items ?? []) {
-        const flag = item.getFlag?.(MODULE_ID, "supply");
-        if (item.type === "container") {
-          visit(item.items ?? [], item, isSupplyTrack(flag) ? flag : inherited);
-          continue;
-        }
-        const track = isSupplyTrack(flag) ? flag : inherited;
-        if (!isSupplyTrack(track)) continue;
-        const units = Number(item.getFlag?.(MODULE_ID, "units"));
-        (container ? packed : loose).push({ item, track, unitsPerQuantity: units > 0 ? units : 1, container });
+    for (const link of store.getCaravan().vehicles) {
+      let vehicle: any = null;
+      try {
+        vehicle = fromUuidSync(link.actorUuid);
+      } catch {
+        vehicle = null;
       }
-    };
-    visit(actor.items ?? [], null, null);
+      if (!vehicle) continue;
+      // A container counts its contents: each content item uses its own supply flag, else the container's.
+      const visit = (items: Iterable<any>, container: any | null, inherited: unknown) => {
+        for (const item of items ?? []) {
+          const flag = item.getFlag?.(MODULE_ID, "supply");
+          if (item.type === "container") {
+            visit(item.items ?? [], item, isSupplyTrack(flag) ? flag : inherited);
+            continue;
+          }
+          const track = isSupplyTrack(flag) ? flag : inherited;
+          if (!isSupplyTrack(track)) continue;
+          const units = Number(item.getFlag?.(MODULE_ID, "units"));
+          (container ? packed : loose).push({
+            item,
+            track,
+            unitsPerQuantity: units > 0 ? units : 1,
+            container,
+            vehicleUuid: link.actorUuid,
+          });
+        }
+      };
+      visit(vehicle.items ?? [], null, null);
+    }
     return [...loose, ...packed];
   },
 
-  async setSupplyQuantity(supply: SupplyItem, quantity: number): Promise<Change> {
+  async setSupplyQuantity(supply: SupplyItem, quantity: number): Promise<void> {
     requireGM();
-    const before = Number(supply.item.system?.quantity ?? 0);
     const after = Math.max(0, Math.round(quantity));
     if (supply.container) {
       await supply.container.updateContainerContents([{ _id: supply.item.id, "system.quantity": after }]);
-      return { kind: "itemQuantity", itemUuid: supply.item.uuid ?? "", before, after, containerUuid: supply.container.uuid, itemId: supply.item.id };
+      return;
     }
     await supply.item.update({ "system.quantity": after });
-    return { kind: "itemQuantity", itemUuid: supply.item.uuid, before, after };
   },
 
   supplyTotals() {
@@ -254,28 +309,5 @@ export const store = {
         console.error(`${MODULE_ID} | change listener failed`, err);
       }
     }
-  },
-
-  async importPack(pack: Pack, sceneId?: string) {
-    requireGM();
-    if (pack?.format !== PACK_FORMAT) throw new Error("Not a PF1 Hexploration pack");
-    if (pack.version !== 1) throw new Error(`Unsupported pack version: ${String(pack.version)}`);
-    if (pack.roles) await store.setRoles(pack.roles);
-    if (pack.settings) {
-      await game.settings.set(MODULE_ID, "settings", JSON.stringify({ ...store.getSettings(), ...pack.settings }));
-    }
-    if (pack.map) await store.setMap({ ...emptyMap(), ...pack.map }, sceneId);
-    store.notify();
-  },
-
-  exportPack(name: string, sceneId?: string): Pack {
-    return {
-      format: PACK_FORMAT,
-      version: 1,
-      name,
-      roles: store.getRoles(),
-      settings: store.getSettings(),
-      map: store.getMap(sceneId),
-    };
   },
 } satisfies StoreApi;

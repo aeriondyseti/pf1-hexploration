@@ -5,20 +5,18 @@ import { MODULE_ID } from "../types";
 export interface ViewOptions {
   terrain: boolean; // terrain fills
   borders: boolean; // hex and region borders
-  difficulty: boolean; // E/S/H/B letters
   tags: boolean; // tag glyphs
   routes: boolean; // route lines
   routeNames: boolean; // route labels
   hiddenRoutes: boolean; // GM only: routes the party doesn't know (drawn faint)
   landmarks: boolean; // landmark stars
   landmarkNames: boolean; // landmark labels
-  leg: boolean; // the current leg's path
+  leg: boolean; // the planned course
 }
 
 export const DEFAULT_VIEW: ViewOptions = {
   terrain: true,
   borders: true,
-  difficulty: true,
   tags: true,
   routes: true,
   routeNames: true,
@@ -32,14 +30,13 @@ export const DEFAULT_VIEW: ViewOptions = {
 export const VIEW_ROWS: { key: keyof ViewOptions; label: string; gmOnly?: boolean }[] = [
   { key: "terrain", label: "Terrain fill" },
   { key: "borders", label: "Hex & region borders" },
-  { key: "difficulty", label: "Difficulty letters" },
-  { key: "tags", label: "Tag glyphs" },
+  { key: "tags", label: "Terrain element icons" },
   { key: "routes", label: "Routes" },
   { key: "routeNames", label: "Route names" },
   { key: "hiddenRoutes", label: "Hidden routes", gmOnly: true },
   { key: "landmarks", label: "Landmarks" },
   { key: "landmarkNames", label: "Landmark names" },
-  { key: "leg", label: "Current leg path" },
+  { key: "leg", label: "Planned course" },
 ];
 
 const SETTING = "viewOptions";
